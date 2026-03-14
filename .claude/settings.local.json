@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(pnpm:*)",
+      "Bash(kill:*)",
+      "Bash(cd:*)",
+      "Bash(npx tsc:*)",
+      "Bash(node:*)",
+      "Bash(npx tsx:*)",
+      "Bash(npx vite:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(sqlite3:*)",
+      "Bash(npx wrangler:*)"
+    ]
+  }
+}
