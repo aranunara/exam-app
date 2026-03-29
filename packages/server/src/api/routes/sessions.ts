@@ -14,6 +14,7 @@ import {
   createSessionSchema,
   submitAnswerSchema,
   completeSessionSchema,
+  flagQuestionSchema,
 } from '../validators/sessions'
 import { generateUlid } from '../../lib/ulid'
 import { now } from '../../lib/timestamp'
@@ -62,14 +63,27 @@ app.post('/', async (c) => {
     startedAt: timestamp,
   })
 
-  for (const q of allQuestions) {
-    const qChoices = await db.query.choices.findMany({
-      where: eq(choices.questionId, q.id),
-      orderBy: (ch, { asc }) => [asc(ch.sortOrder)],
-    })
+  const allChoices = await db.query.choices.findMany({
+    where: inArray(
+      choices.questionId,
+      allQuestions.map((q) => q.id),
+    ),
+    orderBy: (ch, { asc }) => [asc(ch.sortOrder)],
+  })
 
+  const choicesByQuestion = new Map<
+    string,
+    (typeof allChoices)[number][]
+  >()
+  for (const c of allChoices) {
+    const list = choicesByQuestion.get(c.questionId) ?? []
+    list.push(c)
+    choicesByQuestion.set(c.questionId, list)
+  }
+
+  const sessionAnswerValues = allQuestions.map((q) => {
+    const qChoices = choicesByQuestion.get(q.id) ?? []
     const shuffledChoiceIds = shuffleArray(qChoices.map((ch) => ch.id))
-
     const snapshot = JSON.stringify({
       body: q.body,
       explanation: q.explanation,
@@ -82,15 +96,17 @@ app.post('/', async (c) => {
       })),
     })
 
-    await db.insert(sessionAnswers).values({
+    return {
       id: generateUlid(),
       sessionId,
       questionId: q.id,
       choiceOrder: JSON.stringify(shuffledChoiceIds),
       questionVersion: q.version ?? 1,
       questionSnapshot: snapshot,
-    })
-  }
+    }
+  })
+
+  await db.insert(sessionAnswers).values(sessionAnswerValues)
 
   return c.json(
     {
@@ -227,25 +243,29 @@ app.post('/:id/answers', async (c) => {
     const userId = c.get('userId')
     c.executionCtx.waitUntil(
       (async () => {
-        const existing = await db.query.questionConfidence.findFirst({
-          where: and(
-            eq(questionConfidence.userId, userId),
-            eq(questionConfidence.questionId, body.questionId),
-          ),
-        })
-        if (existing) {
-          await db
-            .update(questionConfidence)
-            .set({ level: 1, updatedAt: now() })
-            .where(eq(questionConfidence.id, existing.id))
-        } else {
-          await db.insert(questionConfidence).values({
-            id: generateUlid(),
-            userId,
-            questionId: body.questionId,
-            level: 1,
-            updatedAt: now(),
+        try {
+          const existing = await db.query.questionConfidence.findFirst({
+            where: and(
+              eq(questionConfidence.userId, userId),
+              eq(questionConfidence.questionId, body.questionId),
+            ),
           })
+          if (existing) {
+            await db
+              .update(questionConfidence)
+              .set({ level: 1, updatedAt: now() })
+              .where(eq(questionConfidence.id, existing.id))
+          } else {
+            await db.insert(questionConfidence).values({
+              id: generateUlid(),
+              userId,
+              questionId: body.questionId,
+              level: 1,
+              updatedAt: now(),
+            })
+          }
+        } catch (err) {
+          console.error('Failed to update question confidence:', err)
         }
       })(),
     )
@@ -278,10 +298,9 @@ app.post('/:id/answers', async (c) => {
 app.post('/:id/flag', async (c) => {
   const db = c.get('db')
   const sessionId = c.req.param('id')
-  const { questionId, isFlagged } = await c.req.json<{
-    questionId: string
-    isFlagged: boolean
-  }>()
+  const { questionId, isFlagged } = flagQuestionSchema.parse(
+    await c.req.json(),
+  )
 
   const answer = await db.query.sessionAnswers.findFirst({
     where: and(
@@ -379,16 +398,28 @@ app.get('/:id/results', async (c) => {
     confidenceRows.map((r) => [r.questionId, r.level]),
   )
 
-  const results = await Promise.all(
-    questionOrder.map(async (questionId, index) => {
+  const answerIds = answers.map((a) => a.id)
+  const allSelectedChoices =
+    answerIds.length > 0
+      ? await db
+          .select()
+          .from(sessionAnswerChoices)
+          .where(inArray(sessionAnswerChoices.sessionAnswerId, answerIds))
+      : []
+
+  const choicesByAnswer = new Map<string, string[]>()
+  for (const sc of allSelectedChoices) {
+    const list = choicesByAnswer.get(sc.sessionAnswerId) ?? []
+    list.push(sc.choiceId)
+    choicesByAnswer.set(sc.sessionAnswerId, list)
+  }
+
+  const results = questionOrder
+    .map((questionId, index) => {
       const answer = answers.find((a) => a.questionId === questionId)
       if (!answer) return null
 
       const snapshot = JSON.parse(answer.questionSnapshot)
-      const selectedChoices = await db
-        .select()
-        .from(sessionAnswerChoices)
-        .where(eq(sessionAnswerChoices.sessionAnswerId, answer.id))
 
       return {
         index,
@@ -400,11 +431,10 @@ app.get('/:id/results', async (c) => {
         isFlagged: answer.isFlagged,
         timeSpentSec: answer.timeSpentSec,
         confidenceLevel: confidenceMap.get(questionId) ?? 0,
-        selectedChoiceIds: selectedChoices.map((sc) => sc.choiceId),
+        selectedChoiceIds: choicesByAnswer.get(answer.id) ?? [],
         choices: snapshot.choices,
       }
-    }),
-  )
+    })
 
   return c.json({
     success: true,

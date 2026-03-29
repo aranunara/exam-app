@@ -45,21 +45,17 @@ app.post('/:setId/questions', async (c) => {
     )
   }
 
-  const createdChoices = []
-  for (const ch of body.choices) {
-    const choice = {
-      id: generateUlid(),
-      questionId,
-      body: ch.body,
-      isCorrect: ch.isCorrect,
-      explanation: ch.explanation,
-      sortOrder: ch.sortOrder,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    }
-    await db.insert(choices).values(choice)
-    createdChoices.push(choice)
-  }
+  const createdChoices = body.choices.map((ch) => ({
+    id: generateUlid(),
+    questionId,
+    body: ch.body,
+    isCorrect: ch.isCorrect,
+    explanation: ch.explanation,
+    sortOrder: ch.sortOrder,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  }))
+  await db.insert(choices).values(createdChoices)
 
   return c.json(
     { success: true, data: { ...question, choices: createdChoices } },
@@ -110,17 +106,19 @@ app.put('/:setId/questions/:id', async (c) => {
 
   if (newChoices !== undefined) {
     await db.delete(choices).where(eq(choices.questionId, id))
-    for (const ch of newChoices) {
-      await db.insert(choices).values({
-        id: generateUlid(),
-        questionId: id,
-        body: ch.body,
-        isCorrect: ch.isCorrect,
-        explanation: ch.explanation,
-        sortOrder: ch.sortOrder,
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      })
+    if (newChoices.length > 0) {
+      await db.insert(choices).values(
+        newChoices.map((ch) => ({
+          id: generateUlid(),
+          questionId: id,
+          body: ch.body,
+          isCorrect: ch.isCorrect,
+          explanation: ch.explanation,
+          sortOrder: ch.sortOrder,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        })),
+      )
     }
   }
 
@@ -146,12 +144,15 @@ app.patch('/:setId/questions/reorder', async (c) => {
   const db = c.get('db')
   const body = reorderQuestionsSchema.parse(await c.req.json())
 
-  for (const { id, sortOrder } of body.orders) {
-    await db
-      .update(questions)
-      .set({ sortOrder, updatedAt: now() })
-      .where(eq(questions.id, id))
-  }
+  const timestamp = now()
+  await Promise.all(
+    body.orders.map(({ id, sortOrder }) =>
+      db
+        .update(questions)
+        .set({ sortOrder, updatedAt: timestamp })
+        .where(eq(questions.id, id)),
+    ),
+  )
 
   return c.json({ success: true })
 })

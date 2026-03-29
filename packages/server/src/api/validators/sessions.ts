@@ -14,3 +14,8 @@ export const submitAnswerSchema = z.object({
 export const completeSessionSchema = z.object({
   timeSpentSec: z.number().int().min(0).optional(),
 })
+
+export const flagQuestionSchema = z.object({
+  questionId: z.string().min(1),
+  isFlagged: z.boolean(),
+})
