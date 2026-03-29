@@ -16,7 +16,29 @@ const app = new Hono<Env>()
 
 app.onError(errorHandler)
 
-app.use('*', cors())
+function isAllowedOrigin(origin: string, patterns: string[]): boolean {
+  return patterns.some((pattern) => {
+    if (pattern.startsWith('*.')) {
+      const suffix = pattern.slice(1)
+      return origin.endsWith(suffix) || origin === `https://${pattern.slice(2)}`
+    }
+    return origin === pattern
+  })
+}
+
+app.use('*', async (c, next) => {
+  const patterns = c.env.CORS_ORIGIN
+    ? c.env.CORS_ORIGIN.split(',')
+    : ['http://localhost:5173']
+
+  return cors({
+    origin: (origin) =>
+      isAllowedOrigin(origin, patterns) ? origin : null,
+    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'Authorization'],
+    maxAge: 86400,
+  })(c, next)
+})
 
 app.use('/api/*', async (c, next) => {
   const db = createDb(c.env.DB)
