@@ -18,6 +18,6 @@ fi
 pnpm build
 
 echo "=== Frontend: Deploy Pages ==="
-npx wrangler pages deploy dist --project-name=exam-app
+npx wrangler pages deploy dist --project-name=exam-app --branch=production
 
 echo "=== Done ==="
