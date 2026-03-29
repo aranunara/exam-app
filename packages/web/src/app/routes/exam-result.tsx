@@ -234,6 +234,35 @@ function QuestionReview({
   )
 }
 
+const INITIAL_SHOW = 10
+
+function QuestionReviewList({ results }: { results: SessionResult['results'] }) {
+  const [visibleCount, setVisibleCount] = useState(INITIAL_SHOW)
+  const visible = results.slice(0, visibleCount)
+  const remaining = results.length - visibleCount
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-lg font-semibold">問題の振り返り</h2>
+      {visible.map((questionResult, idx) => (
+        <QuestionReview
+          key={questionResult.questionId}
+          result={questionResult}
+          index={idx}
+        />
+      ))}
+      {remaining > 0 && (
+        <button
+          onClick={() => setVisibleCount((prev) => prev + INITIAL_SHOW)}
+          className="w-full rounded-lg border py-3 text-sm font-medium text-muted-foreground hover:bg-muted"
+        >
+          さらに表示 (残り {remaining} 問)
+        </button>
+      )}
+    </div>
+  )
+}
+
 export default function ExamResultPage() {
   const { questionSetId } = useParams<{ questionSetId: string }>()
   const location = useLocation()
@@ -343,16 +372,7 @@ export default function ExamResultPage() {
         </span>
       </div>
 
-      <div className="space-y-4">
-        <h2 className="text-lg font-semibold">問題の振り返り</h2>
-        {result.results.map((questionResult, idx) => (
-          <QuestionReview
-            key={questionResult.questionId}
-            result={questionResult}
-            index={idx}
-          />
-        ))}
-      </div>
+      <QuestionReviewList results={result.results} />
     </div>
   )
 }

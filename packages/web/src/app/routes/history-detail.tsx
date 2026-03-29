@@ -188,6 +188,31 @@ function QuestionReview({
   )
 }
 
+const INITIAL_SHOW = 10
+
+function HistoryQuestionList({ results }: { results: SessionResult['results'] }) {
+  const [visibleCount, setVisibleCount] = useState(INITIAL_SHOW)
+  const visible = results.slice(0, visibleCount)
+  const remaining = results.length - visibleCount
+
+  return (
+    <section className="space-y-4">
+      <h2 className="text-lg font-semibold">問題一覧</h2>
+      {visible.map((item, idx) => (
+        <QuestionReview key={item.questionId} item={item} index={idx} />
+      ))}
+      {remaining > 0 && (
+        <button
+          onClick={() => setVisibleCount((prev) => prev + INITIAL_SHOW)}
+          className="w-full rounded-lg border py-3 text-sm font-medium text-muted-foreground hover:bg-muted"
+        >
+          さらに表示 (残り {remaining} 問)
+        </button>
+      )}
+    </section>
+  )
+}
+
 function LoadingSkeleton() {
   return (
     <div className="animate-pulse space-y-6">
@@ -250,12 +275,7 @@ export default function HistoryDetailPage() {
 
       <SessionSummary result={result} />
 
-      <section className="space-y-4">
-        <h2 className="text-lg font-semibold">問題一覧</h2>
-        {result.results.map((item, idx) => (
-          <QuestionReview key={item.questionId} item={item} index={idx} />
-        ))}
-      </section>
+      <HistoryQuestionList results={result.results} />
     </div>
   )
 }

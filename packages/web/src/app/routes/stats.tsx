@@ -287,22 +287,6 @@ function HistoryList({
   )
 }
 
-function LoadingSkeleton() {
-  return (
-    <div className="animate-pulse space-y-8">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-24 rounded-lg border bg-muted/50" />
-        ))}
-      </div>
-      <div className="h-6 w-48 rounded bg-muted/50" />
-      <div className="h-48 rounded-lg border bg-muted/50" />
-      <div className="h-6 w-48 rounded bg-muted/50" />
-      <div className="h-40 rounded-lg border bg-muted/50" />
-    </div>
-  )
-}
-
 const HISTORY_LIMIT = 20
 
 export default function StatsPage() {
@@ -337,28 +321,6 @@ export default function StatsPage() {
       }),
   })
 
-  const isLoading =
-    overviewQuery.isLoading ||
-    categoryStatsQuery.isLoading ||
-    tagStatsQuery.isLoading ||
-    weakAreasQuery.isLoading ||
-    historyQuery.isLoading
-
-  const error =
-    overviewQuery.error ||
-    categoryStatsQuery.error ||
-    tagStatsQuery.error ||
-    weakAreasQuery.error ||
-    historyQuery.error
-
-  if (isLoading) {
-    return <LoadingSkeleton />
-  }
-
-  if (error) {
-    return <ErrorMessage message={error.message} />
-  }
-
   const overview = overviewQuery.data?.data
   const categoryStats = categoryStatsQuery.data?.data ?? []
   const tagStats = tagStatsQuery.data?.data ?? []
@@ -369,6 +331,13 @@ export default function StatsPage() {
     ? Math.ceil(historyMeta.total / historyMeta.limit)
     : 1
 
+  const sectionSkeleton = (
+    <div className="animate-pulse space-y-3">
+      <div className="h-6 w-40 rounded bg-muted/50" />
+      <div className="h-32 rounded-lg border bg-muted/50" />
+    </div>
+  )
+
   return (
     <div className="space-y-8">
       <div>
@@ -378,31 +347,33 @@ export default function StatsPage() {
         </p>
       </div>
 
-      {overview && <OverviewCards overview={overview} />}
+      {overviewQuery.isLoading ? sectionSkeleton : overviewQuery.error ? <ErrorMessage message={overviewQuery.error.message} /> : overview && <OverviewCards overview={overview} />}
 
       <section>
         <h2 className="mb-4 text-lg font-semibold">カテゴリ別統計</h2>
-        <CategoryStatsTable stats={categoryStats} />
+        {categoryStatsQuery.isLoading ? sectionSkeleton : categoryStatsQuery.error ? <ErrorMessage message={categoryStatsQuery.error.message} /> : <CategoryStatsTable stats={categoryStats} />}
       </section>
 
       <section>
         <h2 className="mb-4 text-lg font-semibold">タグ別正答率</h2>
-        <TagAccuracyChart tags={tagStats} />
+        {tagStatsQuery.isLoading ? sectionSkeleton : tagStatsQuery.error ? <ErrorMessage message={tagStatsQuery.error.message} /> : <TagAccuracyChart tags={tagStats} />}
       </section>
 
       <section>
         <h2 className="mb-4 text-lg font-semibold">弱点分析</h2>
-        <WeakAreas tags={weakAreas} />
+        {weakAreasQuery.isLoading ? sectionSkeleton : weakAreasQuery.error ? <ErrorMessage message={weakAreasQuery.error.message} /> : <WeakAreas tags={weakAreas} />}
       </section>
 
       <section>
         <h2 className="mb-4 text-lg font-semibold">試験履歴</h2>
-        <HistoryList
-          entries={history}
-          page={page}
-          totalPages={totalPages}
-          onPageChange={setPage}
-        />
+        {historyQuery.isLoading ? sectionSkeleton : historyQuery.error ? <ErrorMessage message={historyQuery.error.message} /> : (
+          <HistoryList
+            entries={history}
+            page={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
+          />
+        )}
       </section>
     </div>
   )
