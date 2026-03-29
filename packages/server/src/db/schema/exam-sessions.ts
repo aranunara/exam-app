@@ -26,6 +26,7 @@ export const examSessions = sqliteTable(
     index('idx_exam_sessions_user_id').on(table.userId),
     index('idx_exam_sessions_question_set_id').on(table.questionSetId),
     index('idx_exam_sessions_status').on(table.status),
+    index('idx_exam_sessions_user_status').on(table.userId, table.status),
   ],
 )
 

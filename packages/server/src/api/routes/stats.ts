@@ -16,8 +16,13 @@ app.get('/overview', async (c) => {
   const db = c.get('db')
   const userId = c.get('userId')
 
-  const sessions = await db
-    .select()
+  const result = await db
+    .select({
+      totalSessions: sql<number>`count(*)`,
+      totalQuestions: sql<number>`coalesce(sum(${examSessions.totalQuestions}), 0)`,
+      totalCorrect: sql<number>`coalesce(sum(${examSessions.correctCount}), 0)`,
+      avgScore: sql<number>`coalesce(round(avg(${examSessions.scorePercent})), 0)`,
+    })
     .from(examSessions)
     .where(
       and(
@@ -26,31 +31,9 @@ app.get('/overview', async (c) => {
       ),
     )
 
-  const totalSessions = sessions.length
-  const totalQuestions = sessions.reduce(
-    (sum, s) => sum + s.totalQuestions,
-    0,
-  )
-  const totalCorrect = sessions.reduce(
-    (sum, s) => sum + (s.correctCount ?? 0),
-    0,
-  )
-  const avgScore =
-    totalSessions > 0
-      ? Math.round(
-          sessions.reduce((sum, s) => sum + (s.scorePercent ?? 0), 0) /
-            totalSessions,
-        )
-      : 0
-
   return c.json({
     success: true,
-    data: {
-      totalSessions,
-      totalQuestions,
-      totalCorrect,
-      avgScore,
-    },
+    data: result[0],
   })
 })
 
