@@ -738,9 +738,18 @@ export default function AdminQuestionSetEditPage() {
           </h2>
 
           {questions.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              問題がまだありません。最初の問題を追加してください。
-            </p>
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                問題がまだありません。最初の問題を追加してください。
+              </p>
+              <button
+                type="button"
+                onClick={handleAddQuestion}
+                className="w-full rounded-md border border-dashed py-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                + 問題を追加
+              </button>
+            </div>
           ) : (
             <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
               <div className="space-y-4 md:col-span-3">
