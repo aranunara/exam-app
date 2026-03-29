@@ -13,13 +13,15 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          'vendor-react': ['react', 'react-dom', 'react-router'],
-          'vendor-clerk': ['@clerk/clerk-react'],
-          'vendor-markdown': ['react-markdown', 'remark-gfm'],
-          'vendor-form': ['react-hook-form', 'zod'],
-          'vendor-query': ['@tanstack/react-query'],
-          'vendor-utils': ['date-fns', 'clsx', 'tailwind-merge'],
+        manualChunks(id: string) {
+          if (id.includes('node_modules')) {
+            if (/[\\/](react|react-dom|react-router)[\\/]/.test(id)) return 'vendor-react'
+            if (id.includes('@clerk')) return 'vendor-clerk'
+            if (/[\\/](react-markdown|remark-gfm|unified|remark|rehype|mdast|unist|micromark)[\\/]/.test(id)) return 'vendor-markdown'
+            if (/[\\/](react-hook-form|zod)[\\/]/.test(id)) return 'vendor-form'
+            if (id.includes('@tanstack')) return 'vendor-query'
+            if (/[\\/](date-fns|clsx|tailwind-merge)[\\/]/.test(id)) return 'vendor-utils'
+          }
         },
       },
     },
