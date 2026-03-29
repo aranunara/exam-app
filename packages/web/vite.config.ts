@@ -10,6 +10,20 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router'],
+          'vendor-clerk': ['@clerk/clerk-react'],
+          'vendor-markdown': ['react-markdown', 'remark-gfm'],
+          'vendor-form': ['react-hook-form', 'zod'],
+          'vendor-query': ['@tanstack/react-query'],
+          'vendor-utils': ['date-fns', 'clsx', 'tailwind-merge'],
+        },
+      },
+    },
+  },
   server: {
     proxy: {
       '/api': {
