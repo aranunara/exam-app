@@ -1,16 +1,17 @@
 import { create } from 'zustand'
+import { useShallow } from 'zustand/shallow'
 
 type ExamState = {
   sessionId: string | null
   mode: 'practice' | 'exam' | null
   currentIndex: number
   totalQuestions: number
-  answers: Map<number, string[]>
-  flags: Set<number>
+  answers: Record<number, string[]>
+  flags: Record<number, boolean>
   timeLimit: number | null
   startedAt: number | null
   elapsedSec: number
-  questionTimes: Map<number, number>
+  questionTimes: Record<number, number>
   isCompleted: boolean
 }
 
@@ -35,12 +36,12 @@ const initialState: ExamState = {
   mode: null,
   currentIndex: 0,
   totalQuestions: 0,
-  answers: new Map(),
-  flags: new Set(),
+  answers: {},
+  flags: {},
   timeLimit: null,
   startedAt: null,
   elapsedSec: 0,
-  questionTimes: new Map(),
+  questionTimes: {},
   isCompleted: false,
 }
 
@@ -60,34 +61,55 @@ export const useExamStore = create<ExamState & ExamActions>((set) => ({
   setCurrentIndex: (index) => set({ currentIndex: index }),
 
   setAnswer: (index, choiceIds) =>
-    set((state) => {
-      const answers = new Map(state.answers)
-      answers.set(index, choiceIds)
-      return { answers }
-    }),
+    set((state) => ({
+      answers: { ...state.answers, [index]: choiceIds },
+    })),
 
   toggleFlag: (index) =>
     set((state) => {
-      const flags = new Set(state.flags)
-      if (flags.has(index)) {
-        flags.delete(index)
-      } else {
-        flags.add(index)
+      const { [index]: current, ...rest } = state.flags
+      return {
+        flags: current ? rest : { ...state.flags, [index]: true },
       }
-      return { flags }
     }),
 
   incrementElapsed: () =>
     set((state) => ({ elapsedSec: state.elapsedSec + 1 })),
 
   recordQuestionTime: (index, seconds) =>
-    set((state) => {
-      const questionTimes = new Map(state.questionTimes)
-      questionTimes.set(index, (questionTimes.get(index) ?? 0) + seconds)
-      return { questionTimes }
-    }),
+    set((state) => ({
+      questionTimes: {
+        ...state.questionTimes,
+        [index]: (state.questionTimes[index] ?? 0) + seconds,
+      },
+    })),
 
   complete: () => set({ isCompleted: true }),
 
   reset: () => set(initialState),
 }))
+
+// Selector hooks for granular subscriptions
+export const useSessionId = () => useExamStore((s) => s.sessionId)
+export const useExamMode = () => useExamStore((s) => s.mode)
+export const useCurrentIndex = () => useExamStore((s) => s.currentIndex)
+export const useTotalQuestions = () => useExamStore((s) => s.totalQuestions)
+export const useElapsedSec = () => useExamStore((s) => s.elapsedSec)
+export const useTimeLimit = () => useExamStore((s) => s.timeLimit)
+export const useIsCompleted = () => useExamStore((s) => s.isCompleted)
+export const useAnswers = () => useExamStore((s) => s.answers)
+export const useFlags = () => useExamStore((s) => s.flags)
+
+export const useExamActions = () =>
+  useExamStore(
+    useShallow((s) => ({
+      startSession: s.startSession,
+      setCurrentIndex: s.setCurrentIndex,
+      setAnswer: s.setAnswer,
+      toggleFlag: s.toggleFlag,
+      incrementElapsed: s.incrementElapsed,
+      recordQuestionTime: s.recordQuestionTime,
+      complete: s.complete,
+      reset: s.reset,
+    })),
+  )

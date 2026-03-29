@@ -1,7 +1,16 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useExamStore } from '@/features/exam/stores/exam-store'
+import {
+  useExamStore,
+  useSessionId,
+  useCurrentIndex,
+  useTotalQuestions,
+  useAnswers,
+  useFlags,
+  useElapsedSec,
+  useExamActions,
+} from '@/features/exam/stores/exam-store'
 import { api } from '@/lib/api-client'
 import { queryKeys } from '@/lib/query-keys'
 import { formatElapsed } from '@/lib/format'
@@ -10,6 +19,15 @@ import { MarkdownRenderer } from '@/components/shared/markdown-renderer'
 import { LoadingSpinner } from '@/components/shared/loading-spinner'
 import { ConfidenceSelector } from '@/components/shared/confidence-selector'
 import { MobileQuestionNav } from '@/components/shared/mobile-question-nav'
+
+function PracticeTimer() {
+  const elapsedSec = useElapsedSec()
+  return (
+    <span className="rounded-lg bg-muted px-3 py-1 font-mono text-sm tabular-nums">
+      {formatElapsed(elapsedSec)}
+    </span>
+  )
+}
 
 type CreateSessionResponse = ApiResponse<{
   id: string
@@ -23,13 +41,12 @@ export default function PracticePage() {
   const { questionSetId } = useParams<{ questionSetId: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const sessionId = useSessionId()
+  const currentIndex = useCurrentIndex()
+  const totalQuestions = useTotalQuestions()
+  const answers = useAnswers()
+  const flags = useFlags()
   const {
-    sessionId,
-    currentIndex,
-    totalQuestions,
-    answers,
-    flags,
-    elapsedSec,
     startSession,
     setCurrentIndex,
     setAnswer,
@@ -38,7 +55,7 @@ export default function PracticePage() {
     recordQuestionTime,
     complete,
     reset,
-  } = useExamStore()
+  } = useExamActions()
 
   const [selectedChoiceIds, setSelectedChoiceIds] = useState<string[]>([])
   const [answerState, setAnswerState] = useState<{
@@ -73,7 +90,7 @@ export default function PracticePage() {
     createSessionMutation.mutate()
     return () => {
       const state = useExamStore.getState()
-      if (state.sessionId && !state.isCompleted && state.answers.size > 0) {
+      if (state.sessionId && !state.isCompleted && Object.keys(state.answers).length > 0) {
         api.post(`/sessions/${state.sessionId}/complete`, {
           timeSpentSec: state.elapsedSec,
         }).catch(() => {})
@@ -103,8 +120,25 @@ export default function PracticePage() {
   const question = questionQuery.data?.data ?? null
 
   useEffect(() => {
+    if (!sessionId || !question) return
+    const prefetch = (idx: number) => {
+      if (idx >= 0 && idx < totalQuestions) {
+        queryClient.prefetchQuery({
+          queryKey: queryKeys.sessions.question(sessionId, idx),
+          queryFn: () =>
+            api.get<ApiResponse<SessionQuestion>>(
+              `/sessions/${sessionId}/questions/${idx}`,
+            ),
+        })
+      }
+    }
+    prefetch(currentIndex + 1)
+    if (currentIndex > 0) prefetch(currentIndex - 1)
+  }, [sessionId, currentIndex, question, totalQuestions, queryClient])
+
+  useEffect(() => {
     if (question) {
-      const stored = answers.get(currentIndex)
+      const stored = answers[currentIndex]
       setSelectedChoiceIds(stored ?? question.selectedChoiceIds ?? [])
       setAnswerState({ feedback: null, confidenceLevel: 0 })
       questionStartTime.current = Date.now()
@@ -189,7 +223,7 @@ export default function PracticePage() {
     try {
       await api.post(`/sessions/${sessionId}/flag`, {
         questionId: question.questionId,
-        isFlagged: !flags.has(currentIndex),
+        isFlagged: !flags[currentIndex],
       })
     } catch (error) {
       toggleFlag(currentIndex)
@@ -202,8 +236,9 @@ export default function PracticePage() {
   const handleComplete = useCallback(async () => {
     if (!sessionId) return
     try {
+      const currentElapsed = useExamStore.getState().elapsedSec
       await api.post(`/sessions/${sessionId}/complete`, {
-        timeSpentSec: elapsedSec,
+        timeSpentSec: currentElapsed,
       })
       complete()
       await queryClient.invalidateQueries({ queryKey: ['stats'] })
@@ -215,70 +250,61 @@ export default function PracticePage() {
         error instanceof Error ? error.message : 'Failed to complete session',
       )
     }
-  }, [sessionId, questionSetId, navigate, complete, elapsedSec, queryClient])
+  }, [sessionId, questionSetId, navigate, complete, queryClient])
 
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement
-      ) {
-        return
-      }
-
-      const key = e.key.toLowerCase()
-
-      if (key >= '1' && key <= '9' && question) {
-        const choiceIndex = parseInt(key, 10) - 1
-        if (choiceIndex < question.choices.length) {
-          handleChoiceToggle(question.choices[choiceIndex].id)
-        }
-        return
-      }
-
-      switch (key) {
-        case 'enter':
-          e.preventDefault()
-          if (!feedback && selectedChoiceIds.length > 0) {
-            handleSubmitAnswer()
-          } else if (feedback) {
-            if (currentIndex >= totalQuestions - 1) {
-              handleComplete()
-            } else {
-              handleNavigate(currentIndex + 1)
-            }
-          }
-          break
-        case 'n':
-          if (feedback && currentIndex < totalQuestions - 1) {
-            handleNavigate(currentIndex + 1)
-          }
-          break
-        case 'p':
-          if (currentIndex > 0) {
-            handleNavigate(currentIndex - 1)
-          }
-          break
-        case 'f':
-          handleToggleFlag()
-          break
-      }
+  const keyHandlerRef = useRef<(e: KeyboardEvent) => void>(() => {})
+  keyHandlerRef.current = (e: KeyboardEvent) => {
+    if (
+      e.target instanceof HTMLInputElement ||
+      e.target instanceof HTMLTextAreaElement
+    ) {
+      return
     }
 
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [
-    question,
-    feedback,
-    selectedChoiceIds,
-    currentIndex,
-    totalQuestions,
-    handleChoiceToggle,
-    handleSubmitAnswer,
-    handleNavigate,
-    handleToggleFlag,
-    handleComplete,
-  ])
+    const key = e.key.toLowerCase()
+
+    if (key >= '1' && key <= '9' && question) {
+      const choiceIndex = parseInt(key, 10) - 1
+      if (choiceIndex < question.choices.length) {
+        handleChoiceToggle(question.choices[choiceIndex].id)
+      }
+      return
+    }
+
+    switch (key) {
+      case 'enter':
+        e.preventDefault()
+        if (!feedback && selectedChoiceIds.length > 0) {
+          handleSubmitAnswer()
+        } else if (feedback) {
+          if (currentIndex >= totalQuestions - 1) {
+            handleComplete()
+          } else {
+            handleNavigate(currentIndex + 1)
+          }
+        }
+        break
+      case 'n':
+        if (feedback && currentIndex < totalQuestions - 1) {
+          handleNavigate(currentIndex + 1)
+        }
+        break
+      case 'p':
+        if (currentIndex > 0) {
+          handleNavigate(currentIndex - 1)
+        }
+        break
+      case 'f':
+        handleToggleFlag()
+        break
+    }
+  }
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => keyHandlerRef.current(e)
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   if (createSessionMutation.isPending) {
     return (
@@ -323,9 +349,7 @@ export default function PracticePage() {
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">演習モード</h1>
         <div className="flex items-center gap-4">
-          <span className="rounded-lg bg-muted px-3 py-1 font-mono text-sm tabular-nums">
-            {formatElapsed(elapsedSec)}
-          </span>
+          <PracticeTimer />
           <span className="text-sm text-muted-foreground">
             問題 {currentIndex + 1} / {totalQuestions}
           </span>
@@ -347,12 +371,12 @@ export default function PracticePage() {
               <button
                 onClick={handleToggleFlag}
                 className={`min-h-[44px] rounded px-3 py-2 text-sm ${
-                  flags.has(currentIndex)
+                  !!flags[currentIndex]
                     ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
                     : 'bg-muted text-muted-foreground hover:bg-muted/80'
                 }`}
               >
-                {flags.has(currentIndex) ? 'フラグ付き' : 'フラグ'}
+                {!!flags[currentIndex] ? 'フラグ付き' : 'フラグ'}
               </button>
             </div>
 
@@ -569,8 +593,8 @@ export default function PracticePage() {
             <h3 className="mb-3 text-sm font-semibold">問題ナビゲーター</h3>
             <div className="grid grid-cols-5 gap-1">
               {Array.from({ length: totalQuestions }, (_, i) => {
-                const isAnswered = answers.has(i)
-                const isFlagged = flags.has(i)
+                const isAnswered = i in answers
+                const isFlagged = !!flags[i]
                 const isCurrent = i === currentIndex
 
                 let btnStyle = 'bg-muted text-muted-foreground'

@@ -1,7 +1,17 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useExamStore } from '@/features/exam/stores/exam-store'
+import {
+  useExamStore,
+  useSessionId,
+  useCurrentIndex,
+  useTotalQuestions,
+  useAnswers,
+  useFlags,
+  useTimeLimit,
+  useElapsedSec,
+  useExamActions,
+} from '@/features/exam/stores/exam-store'
 import { api } from '@/lib/api-client'
 import { queryKeys } from '@/lib/query-keys'
 import { formatCountdown, formatElapsed } from '@/lib/format'
@@ -9,6 +19,35 @@ import type { ApiResponse, SessionQuestion } from '@/types'
 import { MarkdownRenderer } from '@/components/shared/markdown-renderer'
 import { LoadingSpinner } from '@/components/shared/loading-spinner'
 import { MobileQuestionNav } from '@/components/shared/mobile-question-nav'
+
+function ExamTimer() {
+  const elapsedSec = useElapsedSec()
+  const timeLimit = useTimeLimit()
+  const remainingSeconds =
+    timeLimit !== null ? Math.max(0, timeLimit - elapsedSec) : null
+
+  if (remainingSeconds !== null) {
+    return (
+      <span
+        className={`rounded-lg px-3 py-1 font-mono text-sm tabular-nums ${
+          remainingSeconds <= 60
+            ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300 animate-pulse'
+            : remainingSeconds <= 300
+              ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
+              : 'bg-muted'
+        }`}
+      >
+        {formatCountdown(remainingSeconds)}
+      </span>
+    )
+  }
+
+  return (
+    <span className="rounded-lg bg-muted px-3 py-1 font-mono text-sm tabular-nums">
+      {formatElapsed(elapsedSec)}
+    </span>
+  )
+}
 
 type CreateSessionResponse = ApiResponse<{
   id: string
@@ -24,14 +63,13 @@ export default function ExamPage() {
   const { questionSetId } = useParams<{ questionSetId: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const sessionId = useSessionId()
+  const currentIndex = useCurrentIndex()
+  const totalQuestions = useTotalQuestions()
+  const answers = useAnswers()
+  const flags = useFlags()
+  const timeLimit = useTimeLimit()
   const {
-    sessionId,
-    currentIndex,
-    totalQuestions,
-    answers,
-    flags,
-    timeLimit,
-    elapsedSec,
     startSession,
     setCurrentIndex,
     setAnswer,
@@ -40,7 +78,7 @@ export default function ExamPage() {
     recordQuestionTime,
     complete,
     reset,
-  } = useExamStore()
+  } = useExamActions()
 
   const [selectedChoiceIds, setSelectedChoiceIds] = useState<string[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -71,7 +109,7 @@ export default function ExamPage() {
     createSessionMutation.mutate()
     return () => {
       const state = useExamStore.getState()
-      if (state.sessionId && !state.isCompleted && state.answers.size > 0) {
+      if (state.sessionId && !state.isCompleted && Object.keys(state.answers).length > 0) {
         api.post(`/sessions/${state.sessionId}/complete`, {
           timeSpentSec: state.elapsedSec,
         }).catch(() => {})
@@ -89,14 +127,12 @@ export default function ExamPage() {
     return () => clearInterval(interval)
   }, [sessionId, incrementElapsed])
 
-  const remainingSeconds =
-    timeLimit !== null ? Math.max(0, timeLimit - elapsedSec) : null
-
   const handleComplete = useCallback(async () => {
     if (!sessionId) return
     try {
+      const currentElapsed = useExamStore.getState().elapsedSec
       await api.post(`/sessions/${sessionId}/complete`, {
-        timeSpentSec: elapsedSec,
+        timeSpentSec: currentElapsed,
       })
       complete()
       await queryClient.invalidateQueries({ queryKey: ['stats'] })
@@ -108,19 +144,21 @@ export default function ExamPage() {
         error instanceof Error ? error.message : 'Failed to complete exam',
       )
     }
-  }, [sessionId, questionSetId, navigate, complete, elapsedSec, queryClient])
+  }, [sessionId, questionSetId, navigate, complete, queryClient])
+
+  const elapsedSec = useElapsedSec()
 
   useEffect(() => {
     if (
-      remainingSeconds !== null &&
-      remainingSeconds <= 0 &&
+      timeLimit !== null &&
+      elapsedSec >= timeLimit &&
       !hasAutoSubmitted.current &&
       sessionId
     ) {
       hasAutoSubmitted.current = true
       handleComplete()
     }
-  }, [remainingSeconds, sessionId, handleComplete])
+  }, [timeLimit, elapsedSec, sessionId, handleComplete])
 
   const questionQuery = useQuery({
     queryKey: queryKeys.sessions.question(sessionId ?? '', currentIndex),
@@ -134,8 +172,25 @@ export default function ExamPage() {
   const question = questionQuery.data?.data ?? null
 
   useEffect(() => {
+    if (!sessionId || !question) return
+    const prefetch = (idx: number) => {
+      if (idx >= 0 && idx < totalQuestions) {
+        queryClient.prefetchQuery({
+          queryKey: queryKeys.sessions.question(sessionId, idx),
+          queryFn: () =>
+            api.get<ApiResponse<SessionQuestion>>(
+              `/sessions/${sessionId}/questions/${idx}`,
+            ),
+        })
+      }
+    }
+    prefetch(currentIndex + 1)
+    if (currentIndex > 0) prefetch(currentIndex - 1)
+  }, [sessionId, currentIndex, question, totalQuestions, queryClient])
+
+  useEffect(() => {
     if (question) {
-      const stored = answers.get(currentIndex)
+      const stored = answers[currentIndex]
       setSelectedChoiceIds(stored ?? question.selectedChoiceIds ?? [])
       questionStartTime.current = Date.now()
     }
@@ -198,7 +253,7 @@ export default function ExamPage() {
     async (index: number) => {
       if (index < 0 || index >= totalQuestions) return
 
-      if (selectedChoiceIds.length > 0 && !answers.has(currentIndex)) {
+      if (selectedChoiceIds.length > 0 && !(currentIndex in answers)) {
         await handleSubmitAnswer()
       }
 
@@ -213,7 +268,7 @@ export default function ExamPage() {
     try {
       await api.post(`/sessions/${sessionId}/flag`, {
         questionId: question.questionId,
-        isFlagged: !flags.has(currentIndex),
+        isFlagged: !!!flags[currentIndex],
       })
     } catch (error) {
       toggleFlag(currentIndex)
@@ -223,61 +278,53 @@ export default function ExamPage() {
     }
   }, [sessionId, question, currentIndex, flags, toggleFlag])
 
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement
-      ) {
-        return
-      }
-
-      const key = e.key.toLowerCase()
-
-      if (key >= '1' && key <= '9' && question) {
-        const choiceIndex = parseInt(key, 10) - 1
-        if (choiceIndex < question.choices.length) {
-          handleChoiceToggle(question.choices[choiceIndex].id)
-        }
-        return
-      }
-
-      switch (key) {
-        case 'enter':
-          e.preventDefault()
-          if (selectedChoiceIds.length > 0 && !answers.has(currentIndex)) {
-            handleSubmitAnswer()
-          }
-          break
-        case 'n':
-          if (currentIndex < totalQuestions - 1) {
-            handleNavigate(currentIndex + 1)
-          }
-          break
-        case 'p':
-          if (currentIndex > 0) {
-            handleNavigate(currentIndex - 1)
-          }
-          break
-        case 'f':
-          handleToggleFlag()
-          break
-      }
+  const keyHandlerRef = useRef<(e: KeyboardEvent) => void>(() => {})
+  keyHandlerRef.current = (e: KeyboardEvent) => {
+    if (
+      e.target instanceof HTMLInputElement ||
+      e.target instanceof HTMLTextAreaElement
+    ) {
+      return
     }
 
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [
-    question,
-    selectedChoiceIds,
-    answers,
-    currentIndex,
-    totalQuestions,
-    handleChoiceToggle,
-    handleSubmitAnswer,
-    handleNavigate,
-    handleToggleFlag,
-  ])
+    const key = e.key.toLowerCase()
+
+    if (key >= '1' && key <= '9' && question) {
+      const choiceIndex = parseInt(key, 10) - 1
+      if (choiceIndex < question.choices.length) {
+        handleChoiceToggle(question.choices[choiceIndex].id)
+      }
+      return
+    }
+
+    switch (key) {
+      case 'enter':
+        e.preventDefault()
+        if (selectedChoiceIds.length > 0 && !(currentIndex in answers)) {
+          handleSubmitAnswer()
+        }
+        break
+      case 'n':
+        if (currentIndex < totalQuestions - 1) {
+          handleNavigate(currentIndex + 1)
+        }
+        break
+      case 'p':
+        if (currentIndex > 0) {
+          handleNavigate(currentIndex - 1)
+        }
+        break
+      case 'f':
+        handleToggleFlag()
+        break
+    }
+  }
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => keyHandlerRef.current(e)
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   if (createSessionMutation.isPending) {
     return (
@@ -317,30 +364,14 @@ export default function ExamPage() {
     )
   }
 
-  const isCurrentAnswered = answers.has(currentIndex)
+  const isCurrentAnswered = currentIndex in answers
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-4 pb-16 md:pb-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">実戦モード</h1>
         <div className="flex items-center gap-4">
-          {remainingSeconds !== null ? (
-            <span
-              className={`rounded-lg px-3 py-1 font-mono text-sm tabular-nums ${
-                remainingSeconds <= 60
-                  ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300 animate-pulse'
-                  : remainingSeconds <= 300
-                    ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
-                    : 'bg-muted'
-              }`}
-            >
-              {formatCountdown(remainingSeconds)}
-            </span>
-          ) : (
-            <span className="rounded-lg bg-muted px-3 py-1 font-mono text-sm tabular-nums">
-              {formatElapsed(elapsedSec)}
-            </span>
-          )}
+          <ExamTimer />
           <span className="text-sm text-muted-foreground">
             問題 {currentIndex + 1} / {totalQuestions}
           </span>
@@ -362,12 +393,12 @@ export default function ExamPage() {
               <button
                 onClick={handleToggleFlag}
                 className={`min-h-[44px] rounded px-3 py-2 text-sm ${
-                  flags.has(currentIndex)
+                  !!flags[currentIndex]
                     ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
                     : 'bg-muted text-muted-foreground hover:bg-muted/80'
                 }`}
               >
-                {flags.has(currentIndex) ? 'フラグ付き' : 'フラグ'}
+                {!!flags[currentIndex] ? 'フラグ付き' : 'フラグ'}
               </button>
             </div>
 
@@ -487,8 +518,8 @@ export default function ExamPage() {
             <h3 className="mb-3 text-sm font-semibold">問題ナビゲーター</h3>
             <div className="grid grid-cols-5 gap-1">
               {Array.from({ length: totalQuestions }, (_, i) => {
-                const isAnswered = answers.has(i)
-                const isFlagged = flags.has(i)
+                const isAnswered = i in answers
+                const isFlagged = !!flags[i]
                 const isCurrent = i === currentIndex
 
                 let btnStyle = 'bg-muted text-muted-foreground'
@@ -531,11 +562,11 @@ export default function ExamPage() {
 
             <div className="mt-4 border-t pt-3">
               <p className="text-xs text-muted-foreground">
-                回答済み: {answers.size} / {totalQuestions}
+                回答済み: {Object.keys(answers).length} / {totalQuestions}
               </p>
-              {flags.size > 0 && (
+              {Object.values(flags).filter(Boolean).length > 0 && (
                 <p className="text-xs text-yellow-600 dark:text-yellow-400">
-                  フラグ付き: {flags.size}
+                  フラグ付き: {Object.values(flags).filter(Boolean).length}
                 </p>
               )}
             </div>

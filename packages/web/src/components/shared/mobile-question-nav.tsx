@@ -4,8 +4,8 @@ import { cn } from '@/lib/utils'
 interface MobileQuestionNavProps {
   currentIndex: number
   totalQuestions: number
-  answers: Map<number, string[]>
-  flags: Set<number>
+  answers: Record<number, string[]>
+  flags: Record<number, boolean>
   onNavigate: (index: number) => void
 }
 
@@ -55,8 +55,8 @@ export function MobileQuestionNav({
 
             <div className="grid grid-cols-5 gap-1.5">
               {Array.from({ length: totalQuestions }, (_, i) => {
-                const isAnswered = answers.has(i)
-                const isFlagged = flags.has(i)
+                const isAnswered = i in answers
+                const isFlagged = !!flags[i]
                 const isCurrent = i === currentIndex
 
                 let btnStyle = 'bg-muted text-muted-foreground'
@@ -107,8 +107,8 @@ export function MobileQuestionNav({
             </div>
 
             <p className="mt-2 text-xs text-muted-foreground">
-              回答済み: {answers.size} / {totalQuestions}
-              {flags.size > 0 && ` | フラグ: ${flags.size}`}
+              回答済み: {Object.keys(answers).length} / {totalQuestions}
+              {Object.values(flags).filter(Boolean).length > 0 && ` | フラグ: ${Object.values(flags).filter(Boolean).length}`}
             </p>
           </div>
         </>
