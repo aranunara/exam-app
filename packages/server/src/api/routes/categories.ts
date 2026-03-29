@@ -17,6 +17,7 @@ app.get('/', async (c) => {
   const result = await db.query.categories.findMany({
     orderBy: (cat, { asc }) => [asc(cat.sortOrder), asc(cat.name)],
   })
+  c.header('Cache-Control', 'public, max-age=300, stale-while-revalidate=60')
   return c.json({ success: true, data: result })
 })
 
