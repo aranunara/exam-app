@@ -1,22 +1,21 @@
+import { useEffect } from 'react'
 import { Outlet, Link, useLocation } from 'react-router'
 import { SignedIn, UserButton } from '@clerk/clerk-react'
 import { useTheme } from '@/components/shared/theme-provider'
-
-const navItems = [
-  { to: '/dashboard', label: 'ダッシュボード' },
-  { to: '/stats', label: '統計' },
-]
-
-const adminNavItems = [
-  { to: '/admin/categories', label: 'カテゴリ' },
-  { to: '/admin/question-sets', label: '問題セット' },
-  { to: '/admin/import-export', label: 'インポート/エクスポート' },
-]
+import { useMobileDrawer } from '@/hooks/use-mobile-drawer'
+import { navItems, adminNavItems } from './nav-config'
+import { HamburgerButton } from './hamburger-button'
+import { MobileDrawer } from './mobile-drawer'
 
 export function AppLayout() {
   const location = useLocation()
   const { theme, toggleTheme } = useTheme()
   const isAdmin = location.pathname.startsWith('/admin')
+  const drawer = useMobileDrawer()
+
+  useEffect(() => {
+    drawer.close()
+  }, [location.pathname, drawer.close])
 
   return (
     <div className="min-h-screen bg-background">
@@ -31,7 +30,7 @@ export function AppLayout() {
           <Link to="/dashboard" className="mr-8 text-lg font-bold">
             Exam App
           </Link>
-          <nav className="flex items-center gap-1">
+          <nav className="hidden items-center gap-1 md:flex">
             {navItems.map((item) => (
               <Link
                 key={item.to}
@@ -59,7 +58,7 @@ export function AppLayout() {
           <div className="ml-auto flex items-center gap-3">
             <button
               onClick={toggleTheme}
-              className="rounded-md p-2 text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="hidden rounded-md p-2 text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:block"
               aria-label="テーマ切替"
             >
               {theme === 'light' ? (
@@ -105,11 +104,16 @@ export function AppLayout() {
             <SignedIn>
               <UserButton />
             </SignedIn>
+            <HamburgerButton
+              ref={drawer.triggerRef}
+              isOpen={drawer.isOpen}
+              onClick={drawer.toggle}
+            />
           </div>
         </div>
       </header>
       {isAdmin && (
-        <div className="border-b bg-muted/30">
+        <div className="hidden border-b bg-muted/30 md:block">
           <div className="mx-auto flex max-w-7xl items-center gap-1 px-4 py-1">
             {adminNavItems.map((item) => (
               <Link
@@ -132,6 +136,11 @@ export function AppLayout() {
       <main id="main-content" tabIndex={-1} className="mx-auto max-w-7xl px-4 py-6">
         <Outlet />
       </main>
+      <MobileDrawer
+        ref={drawer.drawerRef}
+        isOpen={drawer.isOpen}
+        onClose={drawer.close}
+      />
     </div>
   )
 }

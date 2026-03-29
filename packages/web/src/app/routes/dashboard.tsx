@@ -4,6 +4,10 @@ import { api } from '@/lib/api-client'
 import { queryKeys } from '@/lib/query-keys'
 import { formatScore, formatDate } from '@/lib/format'
 import { ErrorMessage } from '@/components/shared/error-message'
+import {
+  ResponsiveTable,
+  type ColumnDef,
+} from '@/components/shared/responsive-table'
 import type {
   ApiResponse,
   Category,
@@ -75,63 +79,60 @@ function CategoryList({ categories }: { categories: Category[] }) {
   )
 }
 
-function RecentHistory({ entries }: { entries: HistoryEntry[] }) {
-  if (entries.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        試験履歴がまだありません。最初の試験を始めましょう！
-      </p>
-    )
-  }
+const historyColumns: ColumnDef<HistoryEntry>[] = [
+  {
+    header: '問題セット',
+    key: 'questionSetTitle',
+    cell: (entry) => (
+      <span className="font-medium">{entry.questionSetTitle}</span>
+    ),
+    primary: true,
+  },
+  {
+    header: 'カテゴリ',
+    key: 'categoryName',
+    cell: (entry) => (
+      <span className="text-muted-foreground">{entry.categoryName}</span>
+    ),
+  },
+  {
+    header: 'モード',
+    key: 'mode',
+    cell: (entry) => (
+      <span
+        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+          entry.mode === 'exam'
+            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+            : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+        }`}
+      >
+        {entry.mode === 'exam' ? '実戦' : '演習'}
+      </span>
+    ),
+  },
+  {
+    header: 'スコア',
+    key: 'score',
+    cell: (entry) =>
+      entry.scorePercent !== null ? formatScore(entry.scorePercent) : '-',
+  },
+  {
+    header: '日付',
+    key: 'date',
+    cell: (entry) => (
+      <span className="text-muted-foreground">{formatDate(entry.startedAt)}</span>
+    ),
+  },
+]
 
+function RecentHistory({ entries }: { entries: HistoryEntry[] }) {
   return (
-    <div className="overflow-x-auto rounded-lg border">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b bg-muted/50">
-            <th scope="col" className="px-4 py-3 text-left font-medium">問題セット</th>
-            <th scope="col" className="px-4 py-3 text-left font-medium">カテゴリ</th>
-            <th scope="col" className="px-4 py-3 text-left font-medium">モード</th>
-            <th scope="col" className="px-4 py-3 text-left font-medium">スコア</th>
-            <th scope="col" className="px-4 py-3 text-left font-medium">日付</th>
-          </tr>
-        </thead>
-        <tbody>
-          {entries.map((entry) => (
-            <tr
-              key={entry.id}
-              className="border-b last:border-0 hover:bg-muted/30"
-            >
-              <td className="px-4 py-3 font-medium">
-                {entry.questionSetTitle}
-              </td>
-              <td className="px-4 py-3 text-muted-foreground">
-                {entry.categoryName}
-              </td>
-              <td className="px-4 py-3">
-                <span
-                  className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                    entry.mode === 'exam'
-                      ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                      : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                  }`}
-                >
-                  {entry.mode === 'exam' ? '実戦' : '演習'}
-                </span>
-              </td>
-              <td className="px-4 py-3">
-                {entry.scorePercent !== null
-                  ? formatScore(entry.scorePercent)
-                  : '-'}
-              </td>
-              <td className="px-4 py-3 text-muted-foreground">
-                {formatDate(entry.startedAt)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <ResponsiveTable
+      data={entries}
+      columns={historyColumns}
+      keyExtractor={(entry) => entry.id}
+      emptyMessage="試験履歴がまだありません。最初の試験を始めましょう！"
+    />
   )
 }
 

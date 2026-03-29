@@ -9,6 +9,7 @@ import type { ApiResponse, SessionQuestion, AnswerFeedback, ConfidenceLevel } fr
 import { MarkdownRenderer } from '@/components/shared/markdown-renderer'
 import { LoadingSpinner } from '@/components/shared/loading-spinner'
 import { ConfidenceSelector } from '@/components/shared/confidence-selector'
+import { MobileQuestionNav } from '@/components/shared/mobile-question-nav'
 
 type CreateSessionResponse = ApiResponse<{
   id: string
@@ -40,9 +41,13 @@ export default function PracticePage() {
   } = useExamStore()
 
   const [selectedChoiceIds, setSelectedChoiceIds] = useState<string[]>([])
-  const [feedback, setFeedback] = useState<AnswerFeedback | null>(null)
+  const [answerState, setAnswerState] = useState<{
+    feedback: AnswerFeedback | null
+    confidenceLevel: ConfidenceLevel
+  }>({ feedback: null, confidenceLevel: 0 })
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [confidenceLevel, setConfidenceLevel] = useState<ConfidenceLevel>(0)
+
+  const { feedback, confidenceLevel } = answerState
   const questionStartTime = useRef<number>(Date.now())
 
   const createSessionMutation = useMutation({
@@ -101,8 +106,7 @@ export default function PracticePage() {
     if (question) {
       const stored = answers.get(currentIndex)
       setSelectedChoiceIds(stored ?? question.selectedChoiceIds ?? [])
-      setFeedback(null)
-      setConfidenceLevel(0)
+      setAnswerState({ feedback: null, confidenceLevel: 0 })
       questionStartTime.current = Date.now()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -148,10 +152,10 @@ export default function PracticePage() {
       )
 
       if (response.data) {
-        setFeedback(response.data)
-        if (!response.data.isCorrect) {
-          setConfidenceLevel(1)
-        }
+        setAnswerState({
+          feedback: response.data,
+          confidenceLevel: response.data.isCorrect ? 0 : 1,
+        })
       }
     } catch (error) {
       throw new Error(
@@ -173,7 +177,7 @@ export default function PracticePage() {
   const handleNavigate = useCallback(
     (index: number) => {
       if (index < 0 || index >= totalQuestions) return
-      setFeedback(null)
+      setAnswerState({ feedback: null, confidenceLevel: 0 })
       setCurrentIndex(index)
     },
     [totalQuestions, setCurrentIndex],
@@ -315,7 +319,7 @@ export default function PracticePage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 p-4">
+    <div className="mx-auto max-w-5xl space-y-6 p-4 pb-16 md:pb-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">演習モード</h1>
         <div className="flex items-center gap-4">
@@ -328,8 +332,8 @@ export default function PracticePage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
-        <div className="lg:col-span-3 space-y-6">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
+        <div className="md:col-span-3 space-y-6">
           <div className="rounded-lg border bg-card p-6">
             <div className="mb-4 flex items-center justify-between">
               <span className="text-sm font-medium text-muted-foreground">
@@ -342,7 +346,7 @@ export default function PracticePage() {
               </span>
               <button
                 onClick={handleToggleFlag}
-                className={`rounded px-3 py-2 text-sm ${
+                className={`min-h-[44px] rounded px-3 py-2 text-sm ${
                   flags.has(currentIndex)
                     ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
                     : 'bg-muted text-muted-foreground hover:bg-muted/80'
@@ -518,7 +522,9 @@ export default function PracticePage() {
                 <ConfidenceSelector
                   questionId={question.questionId}
                   currentLevel={confidenceLevel}
-                  onLevelChange={setConfidenceLevel}
+                  onLevelChange={(level) =>
+                    setAnswerState((prev) => ({ ...prev, confidenceLevel: level }))
+                  }
                 />
               </div>
             </div>
@@ -528,7 +534,7 @@ export default function PracticePage() {
             <button
               onClick={() => handleNavigate(currentIndex - 1)}
               disabled={currentIndex === 0}
-              className="rounded-lg border px-4 py-2 text-sm hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+              className="min-h-[44px] rounded-lg border px-4 py-2 text-sm hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
             >
               前へ
             </button>
@@ -558,7 +564,7 @@ export default function PracticePage() {
           </div>
         </div>
 
-        <div className="lg:col-span-1">
+        <div className="hidden md:col-span-1 md:block">
           <div className="sticky top-[4.5rem] rounded-lg border bg-card p-4">
             <h3 className="mb-3 text-sm font-semibold">問題ナビゲーター</h3>
             <div className="grid grid-cols-5 gap-1">
@@ -576,7 +582,7 @@ export default function PracticePage() {
 
                 return (
                   <button
-                    key={i}
+                    key={`q-${i}`}
                     onClick={() => handleNavigate(i)}
                     className={`relative flex h-8 w-full items-center justify-center rounded text-xs font-medium ${btnStyle}`}
                   >
@@ -608,6 +614,14 @@ export default function PracticePage() {
           </div>
         </div>
       </div>
+
+      <MobileQuestionNav
+        currentIndex={currentIndex}
+        totalQuestions={totalQuestions}
+        answers={answers}
+        flags={flags}
+        onNavigate={handleNavigate}
+      />
     </div>
   )
 }

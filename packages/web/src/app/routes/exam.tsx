@@ -8,6 +8,7 @@ import { formatCountdown, formatElapsed } from '@/lib/format'
 import type { ApiResponse, SessionQuestion } from '@/types'
 import { MarkdownRenderer } from '@/components/shared/markdown-renderer'
 import { LoadingSpinner } from '@/components/shared/loading-spinner'
+import { MobileQuestionNav } from '@/components/shared/mobile-question-nav'
 
 type CreateSessionResponse = ApiResponse<{
   id: string
@@ -319,7 +320,7 @@ export default function ExamPage() {
   const isCurrentAnswered = answers.has(currentIndex)
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 p-4">
+    <div className="mx-auto max-w-5xl space-y-6 p-4 pb-16 md:pb-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">実戦モード</h1>
         <div className="flex items-center gap-4">
@@ -346,8 +347,8 @@ export default function ExamPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
-        <div className="lg:col-span-3 space-y-6">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
+        <div className="md:col-span-3 space-y-6">
           <div className="rounded-lg border bg-card p-6">
             <div className="mb-4 flex items-center justify-between">
               <span className="text-sm font-medium text-muted-foreground">
@@ -360,7 +361,7 @@ export default function ExamPage() {
               </span>
               <button
                 onClick={handleToggleFlag}
-                className={`rounded px-3 py-2 text-sm ${
+                className={`min-h-[44px] rounded px-3 py-2 text-sm ${
                   flags.has(currentIndex)
                     ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
                     : 'bg-muted text-muted-foreground hover:bg-muted/80'
@@ -467,21 +468,21 @@ export default function ExamPage() {
             <button
               onClick={() => handleNavigate(currentIndex - 1)}
               disabled={currentIndex === 0}
-              className="rounded-lg border px-4 py-2 text-sm hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+              className="min-h-[44px] rounded-lg border px-4 py-2 text-sm hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
             >
               前へ
             </button>
             <button
               onClick={() => handleNavigate(currentIndex + 1)}
               disabled={currentIndex >= totalQuestions - 1}
-              className="rounded-lg border px-4 py-2 text-sm hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+              className="min-h-[44px] rounded-lg border px-4 py-2 text-sm hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
             >
               次へ
             </button>
           </div>
         </div>
 
-        <div className="lg:col-span-1">
+        <div className="hidden md:col-span-1 md:block">
           <div className="sticky top-[4.5rem] rounded-lg border bg-card p-4">
             <h3 className="mb-3 text-sm font-semibold">問題ナビゲーター</h3>
             <div className="grid grid-cols-5 gap-1">
@@ -499,7 +500,7 @@ export default function ExamPage() {
 
                 return (
                   <button
-                    key={i}
+                    key={`q-${i}`}
                     onClick={() => handleNavigate(i)}
                     className={`relative flex h-8 w-full items-center justify-center rounded text-xs font-medium ${btnStyle}`}
                   >
@@ -570,6 +571,14 @@ export default function ExamPage() {
           </div>
         </div>
       </div>
+
+      <MobileQuestionNav
+        currentIndex={currentIndex}
+        totalQuestions={totalQuestions}
+        answers={answers}
+        flags={flags}
+        onNavigate={handleNavigate}
+      />
     </div>
   )
 }

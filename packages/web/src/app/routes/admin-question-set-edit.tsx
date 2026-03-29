@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useReducer } from 'react'
 import { useParams, useNavigate, Link } from 'react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api-client'
@@ -104,6 +104,114 @@ function Toast({ toast, onClose }: { toast: ToastData; onClose: () => void }) {
   )
 }
 
+interface UiState {
+  setDetailOpen: boolean
+  expandedQuestions: Set<number>
+  dirtyQuestions: Set<number>
+  activeQuestionIndex: number | null
+  toast: ToastData | null
+}
+
+type UiAction =
+  | { type: 'SET_DETAIL_OPEN'; open: boolean }
+  | { type: 'EXPAND_QUESTION'; index: number }
+  | { type: 'COLLAPSE_QUESTION'; index: number }
+  | { type: 'SET_EXPANDED'; expanded: Set<number> }
+  | { type: 'MARK_DIRTY'; index: number }
+  | { type: 'CLEAR_DIRTY'; index: number }
+  | { type: 'SET_DIRTY'; dirty: Set<number> }
+  | { type: 'SET_ACTIVE'; index: number | null }
+  | { type: 'SHOW_TOAST'; toast: ToastData }
+  | { type: 'CLEAR_TOAST' }
+  | { type: 'REMOVE_QUESTION_ADJUST'; removedIndex: number }
+  | { type: 'SWAP_QUESTION_INDICES'; fromIndex: number; toIndex: number }
+
+function uiReducer(state: UiState, action: UiAction): UiState {
+  switch (action.type) {
+    case 'SET_DETAIL_OPEN':
+      return { ...state, setDetailOpen: action.open }
+    case 'EXPAND_QUESTION': {
+      const next = new Set(state.expandedQuestions)
+      next.add(action.index)
+      return { ...state, expandedQuestions: next }
+    }
+    case 'COLLAPSE_QUESTION': {
+      const next = new Set(state.expandedQuestions)
+      next.delete(action.index)
+      return { ...state, expandedQuestions: next }
+    }
+    case 'SET_EXPANDED':
+      return { ...state, expandedQuestions: action.expanded }
+    case 'MARK_DIRTY': {
+      const next = new Set(state.dirtyQuestions)
+      next.add(action.index)
+      return { ...state, dirtyQuestions: next }
+    }
+    case 'CLEAR_DIRTY': {
+      const next = new Set(state.dirtyQuestions)
+      next.delete(action.index)
+      return { ...state, dirtyQuestions: next }
+    }
+    case 'SET_DIRTY':
+      return { ...state, dirtyQuestions: action.dirty }
+    case 'SET_ACTIVE':
+      return { ...state, activeQuestionIndex: action.index }
+    case 'SHOW_TOAST':
+      return { ...state, toast: action.toast }
+    case 'CLEAR_TOAST':
+      return { ...state, toast: null }
+    case 'REMOVE_QUESTION_ADJUST': {
+      const { removedIndex } = action
+      const nextExpanded = new Set<number>()
+      for (const idx of state.expandedQuestions) {
+        if (idx < removedIndex) nextExpanded.add(idx)
+        else if (idx > removedIndex) nextExpanded.add(idx - 1)
+      }
+      const nextDirty = new Set<number>()
+      for (const idx of state.dirtyQuestions) {
+        if (idx < removedIndex) nextDirty.add(idx)
+        else if (idx > removedIndex) nextDirty.add(idx - 1)
+      }
+      let nextActive = state.activeQuestionIndex
+      if (nextActive === removedIndex) {
+        nextActive = null
+      } else if (nextActive !== null && nextActive > removedIndex) {
+        nextActive = nextActive - 1
+      }
+      return {
+        ...state,
+        expandedQuestions: nextExpanded,
+        dirtyQuestions: nextDirty,
+        activeQuestionIndex: nextActive,
+      }
+    }
+    case 'SWAP_QUESTION_INDICES': {
+      const { fromIndex, toIndex } = action
+      const nextExpanded = new Set<number>()
+      for (const idx of state.expandedQuestions) {
+        if (idx === fromIndex) nextExpanded.add(toIndex)
+        else if (idx === toIndex) nextExpanded.add(fromIndex)
+        else nextExpanded.add(idx)
+      }
+      const nextDirty = new Set<number>()
+      for (const idx of state.dirtyQuestions) {
+        if (idx === fromIndex) nextDirty.add(toIndex)
+        else if (idx === toIndex) nextDirty.add(fromIndex)
+        else nextDirty.add(idx)
+      }
+      let nextActive = state.activeQuestionIndex
+      if (nextActive === fromIndex) nextActive = toIndex
+      else if (nextActive === toIndex) nextActive = fromIndex
+      return {
+        ...state,
+        expandedQuestions: nextExpanded,
+        dirtyQuestions: nextDirty,
+        activeQuestionIndex: nextActive,
+      }
+    }
+  }
+}
+
 export default function AdminQuestionSetEditPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -120,22 +228,20 @@ export default function AdminQuestionSetEditPage() {
   })
   const [questions, setQuestions] = useState<QuestionFormData[]>([])
   const [initialized, setInitialized] = useState(isNew)
-  const [toast, setToast] = useState<ToastData | null>(null)
 
-  const [setDetailOpen, setSetDetailOpen] = useState(isNew)
-  const [expandedQuestions, setExpandedQuestions] = useState<Set<number>>(
-    new Set(),
-  )
-  const [dirtyQuestions, setDirtyQuestions] = useState<Set<number>>(new Set())
-  const [activeQuestionIndex, setActiveQuestionIndex] = useState<number | null>(
-    null,
-  )
+  const [ui, dispatch] = useReducer(uiReducer, {
+    setDetailOpen: isNew,
+    expandedQuestions: new Set<number>(),
+    dirtyQuestions: new Set<number>(),
+    activeQuestionIndex: null,
+    toast: null,
+  })
 
   const questionRefs = useRef<Map<number, HTMLDivElement>>(new Map())
 
   function showToast(data: ToastData) {
-    setToast(data)
-    setTimeout(() => setToast(null), 4000)
+    dispatch({ type: 'SHOW_TOAST', toast: data })
+    setTimeout(() => dispatch({ type: 'CLEAR_TOAST' }), 4000)
   }
 
   const setQuery = useQuery({
@@ -228,11 +334,7 @@ export default function AdminQuestionSetEditPage() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.questionSets.detail(id!),
       })
-      setDirtyQuestions((prev) => {
-        const next = new Set(prev)
-        next.delete(variables.questionIndex)
-        return next
-      })
+      dispatch({ type: 'CLEAR_DIRTY', index: variables.questionIndex })
       if (response.data?.id) {
         setQuestions((prev) =>
           prev.map((q, i) =>
@@ -292,11 +394,7 @@ export default function AdminQuestionSetEditPage() {
 
   function handleQuestionChange(index: number, updated: QuestionFormData) {
     setQuestions((prev) => prev.map((q, i) => (i === index ? updated : q)))
-    setDirtyQuestions((prev) => {
-      const next = new Set(prev)
-      next.add(index)
-      return next
-    })
+    dispatch({ type: 'MARK_DIRTY', index })
   }
 
   function handleRemoveQuestion(index: number) {
@@ -309,38 +407,14 @@ export default function AdminQuestionSetEditPage() {
         .filter((_, i) => i !== index)
         .map((q, i) => ({ ...q, sortOrder: i })),
     )
-    setExpandedQuestions((prev) => {
-      const next = new Set<number>()
-      for (const idx of prev) {
-        if (idx < index) next.add(idx)
-        else if (idx > index) next.add(idx - 1)
-      }
-      return next
-    })
-    setDirtyQuestions((prev) => {
-      const next = new Set<number>()
-      for (const idx of prev) {
-        if (idx < index) next.add(idx)
-        else if (idx > index) next.add(idx - 1)
-      }
-      return next
-    })
-    if (activeQuestionIndex === index) {
-      setActiveQuestionIndex(null)
-    } else if (activeQuestionIndex !== null && activeQuestionIndex > index) {
-      setActiveQuestionIndex(activeQuestionIndex - 1)
-    }
+    dispatch({ type: 'REMOVE_QUESTION_ADJUST', removedIndex: index })
   }
 
   function handleAddQuestion() {
     const newIndex = questions.length
     setQuestions((prev) => [...prev, createEmptyQuestion(prev.length)])
-    setExpandedQuestions((prev) => {
-      const next = new Set(prev)
-      next.add(newIndex)
-      return next
-    })
-    setActiveQuestionIndex(newIndex)
+    dispatch({ type: 'EXPAND_QUESTION', index: newIndex })
+    dispatch({ type: 'SET_ACTIVE', index: newIndex })
 
     requestAnimationFrame(() => {
       const el = questionRefs.current.get(newIndex)
@@ -360,31 +434,7 @@ export default function AdminQuestionSetEditPage() {
       return newList
     })
 
-    setExpandedQuestions((prev) => {
-      const next = new Set<number>()
-      for (const idx of prev) {
-        if (idx === fromIndex) next.add(toIndex)
-        else if (idx === toIndex) next.add(fromIndex)
-        else next.add(idx)
-      }
-      return next
-    })
-
-    setDirtyQuestions((prev) => {
-      const next = new Set<number>()
-      for (const idx of prev) {
-        if (idx === fromIndex) next.add(toIndex)
-        else if (idx === toIndex) next.add(fromIndex)
-        else next.add(idx)
-      }
-      return next
-    })
-
-    if (activeQuestionIndex === fromIndex) {
-      setActiveQuestionIndex(toIndex)
-    } else if (activeQuestionIndex === toIndex) {
-      setActiveQuestionIndex(fromIndex)
-    }
+    dispatch({ type: 'SWAP_QUESTION_INDICES', fromIndex, toIndex })
 
     const existingIds = questions
       .map((q) => q.id)
@@ -405,7 +455,7 @@ export default function AdminQuestionSetEditPage() {
   }
 
   function handleSaveSet() {
-    setToast(null)
+    dispatch({ type: 'CLEAR_TOAST' })
     const payload = {
       title: setForm.title,
       description: setForm.description || null,
@@ -424,7 +474,7 @@ export default function AdminQuestionSetEditPage() {
 
   function handleSaveQuestion(index: number) {
     const question = questions[index]
-    setToast(null)
+    dispatch({ type: 'CLEAR_TOAST' })
 
     if (!question.body.trim()) {
       showToast({
@@ -478,12 +528,8 @@ export default function AdminQuestionSetEditPage() {
   }
 
   function handleNavigateToQuestion(index: number) {
-    setActiveQuestionIndex(index)
-    setExpandedQuestions((prev) => {
-      const next = new Set(prev)
-      next.add(index)
-      return next
-    })
+    dispatch({ type: 'SET_ACTIVE', index })
+    dispatch({ type: 'EXPAND_QUESTION', index })
     requestAnimationFrame(() => {
       const el = questionRefs.current.get(index)
       el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -503,7 +549,7 @@ export default function AdminQuestionSetEditPage() {
       const q = questions[i]
       if (!q.id) {
         states.set(i, 'new')
-      } else if (dirtyQuestions.has(i)) {
+      } else if (ui.dirtyQuestions.has(i)) {
         states.set(i, 'dirty')
       } else {
         states.set(i, 'saved')
@@ -543,11 +589,11 @@ export default function AdminQuestionSetEditPage() {
       </h1>
 
       <Collapsible
-        open={setDetailOpen}
-        onOpenChange={setSetDetailOpen}
+        open={ui.setDetailOpen}
+        onOpenChange={(open) => dispatch({ type: 'SET_DETAIL_OPEN', open })}
         title="セット詳細"
         badge={
-          !setDetailOpen && setForm.title ? (
+          !ui.setDetailOpen && setForm.title ? (
             <span className="text-sm font-normal text-muted-foreground">
               {setForm.title}
             </span>
@@ -646,8 +692,8 @@ export default function AdminQuestionSetEditPage() {
           </div>
 
           {tags.length > 0 && (
-            <div>
-              <label className="mb-1 block text-sm font-medium">タグ</label>
+            <fieldset>
+              <legend className="mb-1 block text-sm font-medium">タグ</legend>
               <div className="flex flex-wrap gap-2">
                 {tags.map((tag) => {
                   const isSelected = setForm.tagIds.includes(tag.id)
@@ -667,7 +713,7 @@ export default function AdminQuestionSetEditPage() {
                   )
                 })}
               </div>
-            </div>
+            </fieldset>
           )}
 
           <button
@@ -696,8 +742,8 @@ export default function AdminQuestionSetEditPage() {
               問題がまだありません。最初の問題を追加してください。
             </p>
           ) : (
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
-              <div className="space-y-4 lg:col-span-3">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
+              <div className="space-y-4 md:col-span-3">
                 {questions.map((question, idx) => (
                   <div
                     key={question.id ?? `new-${idx}`}
@@ -718,22 +764,18 @@ export default function AdminQuestionSetEditPage() {
                       onRemove={() => handleRemoveQuestion(idx)}
                       onMoveUp={() => handleMoveQuestion(idx, 'up')}
                       onMoveDown={() => handleMoveQuestion(idx, 'down')}
-                      isOpen={expandedQuestions.has(idx)}
+                      isOpen={ui.expandedQuestions.has(idx)}
                       onOpenChange={(open) => {
-                        setExpandedQuestions((prev) => {
-                          const next = new Set(prev)
-                          if (open) {
-                            next.add(idx)
-                          } else {
-                            next.delete(idx)
-                          }
-                          return next
-                        })
+                        dispatch(
+                          open
+                            ? { type: 'EXPAND_QUESTION', index: idx }
+                            : { type: 'COLLAPSE_QUESTION', index: idx },
+                        )
                         if (open) {
-                          setActiveQuestionIndex(idx)
+                          dispatch({ type: 'SET_ACTIVE', index: idx })
                         }
                       }}
-                      isDirty={dirtyQuestions.has(idx) || !question.id}
+                      isDirty={ui.dirtyQuestions.has(idx) || !question.id}
                       onSave={() => handleSaveQuestion(idx)}
                       isSaving={saveQuestionMutation.isPending}
                     />
@@ -749,12 +791,12 @@ export default function AdminQuestionSetEditPage() {
                 </button>
               </div>
 
-              <div className="lg:col-span-1">
+              <div className="md:col-span-1">
                 <div className="sticky top-[6.5rem]">
                   <QuestionNavigator
                     totalQuestions={questions.length}
                     questionStates={getQuestionStates()}
-                    activeIndex={activeQuestionIndex}
+                    activeIndex={ui.activeQuestionIndex}
                     onNavigate={handleNavigateToQuestion}
                   />
                 </div>
@@ -764,9 +806,9 @@ export default function AdminQuestionSetEditPage() {
         </section>
       )}
 
-      {toast && (
+      {ui.toast && (
         <div className="fixed bottom-4 right-4 z-50 max-w-sm">
-          <Toast toast={toast} onClose={() => setToast(null)} />
+          <Toast toast={ui.toast} onClose={() => dispatch({ type: 'CLEAR_TOAST' })} />
         </div>
       )}
     </div>

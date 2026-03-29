@@ -43,7 +43,7 @@ export function ConfidenceSelector({
   }
 
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex items-center gap-2 sm:gap-1.5">
       <span className="mr-1 text-xs text-muted-foreground">自信度:</span>
       {confidenceLevels.map((config) => {
         const isActive = currentLevel === config.level
@@ -54,7 +54,7 @@ export function ConfidenceSelector({
             type="button"
             onClick={() => handleClick(config.level as ConfidenceLevel)}
             disabled={mutation.isPending}
-            className={`rounded-md border px-2 py-1 text-xs font-medium transition-colors disabled:opacity-50 ${
+            className={`rounded-md border px-3 py-2 text-xs font-medium transition-colors disabled:opacity-50 sm:px-2 sm:py-1 ${
               isActive
                 ? `${config.bgClass} ${config.textClass} ${config.borderClass}`
                 : 'border-border bg-card text-muted-foreground hover:bg-muted'

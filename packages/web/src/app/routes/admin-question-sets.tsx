@@ -5,6 +5,10 @@ import { api } from '@/lib/api-client'
 import { queryKeys } from '@/lib/query-keys'
 import { formatDateShort } from '@/lib/format'
 import { ErrorMessage } from '@/components/shared/error-message'
+import {
+  ResponsiveTable,
+  type ColumnDef,
+} from '@/components/shared/responsive-table'
 import type { ApiResponse, QuestionSet, Category } from '@/types'
 
 function DeleteConfirmation({
@@ -118,95 +122,134 @@ export default function AdminQuestionSetsPage() {
 
       {mutationError && <ErrorMessage message={mutationError} />}
 
-      {questionSets.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          問題セットがまだありません。最初の問題セットを作成してください。
-        </p>
-      ) : (
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-muted/50">
-                <th scope="col" className="px-4 py-3 text-left font-medium">タイトル</th>
-                <th scope="col" className="px-4 py-3 text-left font-medium">カテゴリ</th>
-                <th scope="col" className="px-4 py-3 text-left font-medium">問題数</th>
-                <th scope="col" className="px-4 py-3 text-left font-medium">ステータス</th>
-                <th scope="col" className="px-4 py-3 text-left font-medium">作成日</th>
-                <th scope="col" className="px-4 py-3 text-right font-medium">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {questionSets.map((set) => (
-                <tr
-                  key={set.id}
-                  className="border-b last:border-0 hover:bg-muted/30"
-                >
-                  <td className="px-4 py-3">
-                    <Link
-                      to={`/admin/question-sets/${set.id}`}
-                      className="font-medium text-primary hover:underline"
-                    >
-                      {set.title}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {categoryMap.get(set.categoryId) ?? '不明'}
-                  </td>
-                  <td className="px-4 py-3">
-                    {set.questionCount ?? set.questions?.length ?? 0}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                        set.isPublished
-                          ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                          : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
-                      }`}
-                    >
-                      {set.isPublished ? '公開' : '下書き'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {formatDateShort(set.createdAt)}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    {deletingId === set.id ? (
-                      <DeleteConfirmation
-                        title={set.title}
-                        onConfirm={() => deleteMutation.mutate(set.id)}
-                        onCancel={() => {
-                          setDeletingId(null)
-                          setMutationError(null)
-                        }}
-                        isDeleting={deleteMutation.isPending}
-                      />
-                    ) : (
-                      <div className="flex justify-end gap-2">
-                        <Link
-                          to={`/admin/question-sets/${set.id}`}
-                          className="rounded-md border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted"
-                        >
-                          編集
-                        </Link>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setDeletingId(set.id)
-                            setMutationError(null)
-                          }}
-                          className="rounded-md border border-destructive/50 px-3 py-1.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
-                        >
-                          削除
-                        </button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <ResponsiveTable
+        data={questionSets}
+        columns={[
+          {
+            header: 'タイトル',
+            key: 'title',
+            cell: (set: QuestionSet) => (
+              <Link
+                to={`/admin/question-sets/${set.id}`}
+                className="font-medium text-primary hover:underline"
+              >
+                {set.title}
+              </Link>
+            ),
+            primary: true,
+          },
+          {
+            header: 'カテゴリ',
+            key: 'category',
+            cell: (set: QuestionSet) => (
+              <span className="text-muted-foreground">
+                {categoryMap.get(set.categoryId) ?? '不明'}
+              </span>
+            ),
+          },
+          {
+            header: '問題数',
+            key: 'questionCount',
+            cell: (set: QuestionSet) =>
+              set.questionCount ?? set.questions?.length ?? 0,
+          },
+          {
+            header: 'ステータス',
+            key: 'status',
+            cell: (set: QuestionSet) => (
+              <span
+                className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                  set.isPublished
+                    ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                    : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                }`}
+              >
+                {set.isPublished ? '公開' : '下書き'}
+              </span>
+            ),
+          },
+          {
+            header: '作成日',
+            key: 'createdAt',
+            cell: (set: QuestionSet) => (
+              <span className="text-muted-foreground">
+                {formatDateShort(set.createdAt)}
+              </span>
+            ),
+          },
+          {
+            header: '操作',
+            key: 'actions',
+            align: 'right' as const,
+            hideOnMobile: true,
+            cell: (set: QuestionSet) =>
+              deletingId === set.id ? (
+                <DeleteConfirmation
+                  title={set.title}
+                  onConfirm={() => deleteMutation.mutate(set.id)}
+                  onCancel={() => {
+                    setDeletingId(null)
+                    setMutationError(null)
+                  }}
+                  isDeleting={deleteMutation.isPending}
+                />
+              ) : (
+                <div className="flex justify-end gap-2">
+                  <Link
+                    to={`/admin/question-sets/${set.id}`}
+                    className="rounded-md border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted"
+                  >
+                    編集
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeletingId(set.id)
+                      setMutationError(null)
+                    }}
+                    className="rounded-md border border-destructive/50 px-3 py-1.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
+                  >
+                    削除
+                  </button>
+                </div>
+              ),
+          },
+        ] satisfies ColumnDef<QuestionSet>[]}
+        keyExtractor={(set) => set.id}
+        cardFooter={(set) =>
+          deletingId === set.id ? (
+            <DeleteConfirmation
+              title={set.title}
+              onConfirm={() => deleteMutation.mutate(set.id)}
+              onCancel={() => {
+                setDeletingId(null)
+                setMutationError(null)
+              }}
+              isDeleting={deleteMutation.isPending}
+            />
+          ) : (
+            <div className="flex gap-2">
+              <Link
+                to={`/admin/question-sets/${set.id}`}
+                className="rounded-md border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted"
+              >
+                編集
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  setDeletingId(set.id)
+                  setMutationError(null)
+                }}
+                className="rounded-md border border-destructive/50 px-3 py-1.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
+              >
+                削除
+              </button>
+            </div>
+          )
+        }
+        emptyMessage="問題セットがまだありません。最初の問題セットを作成してください。"
+      />
     </div>
   )
 }

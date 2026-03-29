@@ -5,6 +5,10 @@ import { api } from '@/lib/api-client'
 import { queryKeys } from '@/lib/query-keys'
 import { formatScore, formatDate, formatDuration } from '@/lib/format'
 import { ErrorMessage } from '@/components/shared/error-message'
+import {
+  ResponsiveTable,
+  type ColumnDef,
+} from '@/components/shared/responsive-table'
 import type {
   ApiResponse,
   StatsOverview,
@@ -50,48 +54,44 @@ function OverviewCards({ overview }: { overview: StatsOverview }) {
   )
 }
 
+const categoryColumns: ColumnDef<CategoryStats>[] = [
+  {
+    header: 'カテゴリ',
+    key: 'categoryName',
+    cell: (row) => <span className="font-medium">{row.categoryName}</span>,
+    primary: true,
+  },
+  {
+    header: 'セッション数',
+    key: 'sessions',
+    cell: (row) => row.sessions,
+  },
+  {
+    header: '平均スコア',
+    key: 'avgScore',
+    cell: (row) => formatScore(row.avgScore),
+  },
+  {
+    header: '正答率',
+    key: 'correctRate',
+    cell: (row) => {
+      const rate =
+        row.totalQuestions > 0
+          ? Math.round((row.totalCorrect / row.totalQuestions) * 100)
+          : 0
+      return `${rate}%`
+    },
+  },
+]
+
 function CategoryStatsTable({ stats }: { stats: CategoryStats[] }) {
-  if (stats.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        カテゴリ統計がまだありません。
-      </p>
-    )
-  }
-
   return (
-    <div className="overflow-x-auto rounded-lg border">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b bg-muted/50">
-            <th scope="col" className="px-4 py-3 text-left font-medium">カテゴリ</th>
-            <th scope="col" className="px-4 py-3 text-left font-medium">セッション数</th>
-            <th scope="col" className="px-4 py-3 text-left font-medium">平均スコア</th>
-            <th scope="col" className="px-4 py-3 text-left font-medium">正答率</th>
-          </tr>
-        </thead>
-        <tbody>
-          {stats.map((row) => {
-            const correctRate =
-              row.totalQuestions > 0
-                ? Math.round((row.totalCorrect / row.totalQuestions) * 100)
-                : 0
-
-            return (
-              <tr
-                key={row.categoryId}
-                className="border-b last:border-0 hover:bg-muted/30"
-              >
-                <td className="px-4 py-3 font-medium">{row.categoryName}</td>
-                <td className="px-4 py-3">{row.sessions}</td>
-                <td className="px-4 py-3">{formatScore(row.avgScore)}</td>
-                <td className="px-4 py-3">{correctRate}%</td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
+    <ResponsiveTable
+      data={stats}
+      columns={categoryColumns}
+      keyExtractor={(row) => row.categoryId}
+      emptyMessage="カテゴリ統計がまだありません。"
+    />
   )
 }
 
@@ -176,6 +176,69 @@ function WeakAreas({ tags }: { tags: TagStats[] }) {
   )
 }
 
+const historyColumns: ColumnDef<HistoryEntry>[] = [
+  {
+    header: '問題セット',
+    key: 'questionSetTitle',
+    cell: (entry) => (
+      <Link
+        to={`/stats/history/${entry.id}`}
+        className="font-medium text-primary hover:underline"
+      >
+        {entry.questionSetTitle}
+      </Link>
+    ),
+    primary: true,
+    mobileCell: (entry) => entry.questionSetTitle,
+  },
+  {
+    header: 'カテゴリ',
+    key: 'categoryName',
+    cell: (entry) => (
+      <span className="text-muted-foreground">{entry.categoryName}</span>
+    ),
+  },
+  {
+    header: 'モード',
+    key: 'mode',
+    cell: (entry) => (
+      <span
+        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+          entry.mode === 'exam'
+            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+            : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+        }`}
+      >
+        {entry.mode === 'exam' ? '実戦' : '演習'}
+      </span>
+    ),
+  },
+  {
+    header: 'スコア',
+    key: 'score',
+    cell: (entry) =>
+      entry.scorePercent !== null ? formatScore(entry.scorePercent) : '-',
+  },
+  {
+    header: '所要時間',
+    key: 'timeSpent',
+    cell: (entry) => (
+      <span className="text-muted-foreground">
+        {entry.timeSpentSec !== null ? formatDuration(entry.timeSpentSec) : '-'}
+      </span>
+    ),
+  },
+  {
+    header: '日付',
+    key: 'date',
+    cell: (entry) => (
+      <span className="text-muted-foreground">
+        {formatDate(entry.startedAt)}
+      </span>
+    ),
+  },
+]
+
 function HistoryList({
   entries,
   page,
@@ -187,72 +250,15 @@ function HistoryList({
   totalPages: number
   onPageChange: (page: number) => void
 }) {
-  if (entries.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">試験履歴がまだありません。</p>
-    )
-  }
-
   return (
     <div className="space-y-4">
-      <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b bg-muted/50">
-              <th scope="col" className="px-4 py-3 text-left font-medium">問題セット</th>
-              <th scope="col" className="px-4 py-3 text-left font-medium">カテゴリ</th>
-              <th scope="col" className="px-4 py-3 text-left font-medium">モード</th>
-              <th scope="col" className="px-4 py-3 text-left font-medium">スコア</th>
-              <th scope="col" className="px-4 py-3 text-left font-medium">所要時間</th>
-              <th scope="col" className="px-4 py-3 text-left font-medium">日付</th>
-            </tr>
-          </thead>
-          <tbody>
-            {entries.map((entry) => (
-              <tr
-                key={entry.id}
-                className="border-b last:border-0 hover:bg-muted/30"
-              >
-                <td className="px-4 py-3">
-                  <Link
-                    to={`/stats/history/${entry.id}`}
-                    className="font-medium text-primary hover:underline"
-                  >
-                    {entry.questionSetTitle}
-                  </Link>
-                </td>
-                <td className="px-4 py-3 text-muted-foreground">
-                  {entry.categoryName}
-                </td>
-                <td className="px-4 py-3">
-                  <span
-                    className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                      entry.mode === 'exam'
-                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                        : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                    }`}
-                  >
-                    {entry.mode === 'exam' ? '実戦' : '演習'}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  {entry.scorePercent !== null
-                    ? formatScore(entry.scorePercent)
-                    : '-'}
-                </td>
-                <td className="px-4 py-3 text-muted-foreground">
-                  {entry.timeSpentSec !== null
-                    ? formatDuration(entry.timeSpentSec)
-                    : '-'}
-                </td>
-                <td className="px-4 py-3 text-muted-foreground">
-                  {formatDate(entry.startedAt)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <ResponsiveTable
+        data={entries}
+        columns={historyColumns}
+        keyExtractor={(entry) => entry.id}
+        rowLink={(entry) => `/stats/history/${entry.id}`}
+        emptyMessage="試験履歴がまだありません。"
+      />
 
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-2">
@@ -260,7 +266,7 @@ function HistoryList({
             type="button"
             disabled={page <= 1}
             onClick={() => onPageChange(page - 1)}
-            className="rounded-md border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+            className="min-h-[44px] rounded-md border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
           >
             前へ
           </button>
@@ -271,7 +277,7 @@ function HistoryList({
             type="button"
             disabled={page >= totalPages}
             onClick={() => onPageChange(page + 1)}
-            className="rounded-md border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+            className="min-h-[44px] rounded-md border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
           >
             次へ
           </button>
