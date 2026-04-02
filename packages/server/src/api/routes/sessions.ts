@@ -14,13 +14,14 @@ import {
   createSessionSchema,
   submitAnswerSchema,
   completeSessionSchema,
-  flagQuestionSchema,
+  previewFilterSchema,
 } from '../validators/sessions'
 import { generateUlid } from '../../lib/ulid'
 import { now } from '../../lib/timestamp'
 import { shuffleArray } from '../../lib/shuffle'
 import { calculateScorePercent } from '../../lib/scoring'
 import { AppError } from '../middleware/error-handler'
+import { getSessionForUser } from '../helpers/ownership'
 
 const app = new Hono<Env>()
 
@@ -32,6 +33,7 @@ app.post('/', async (c) => {
   const questionSet = await db.query.questionSets.findFirst({
     where: and(
       eq(questionSets.id, body.questionSetId),
+      eq(questionSets.userId, userId),
       eq(questionSets.isPublished, true),
     ),
   })
@@ -48,7 +50,43 @@ app.post('/', async (c) => {
     throw new AppError('Question set has no questions', 400)
   }
 
-  const shuffledQuestionIds = shuffleArray(allQuestions.map((q) => q.id))
+  let filteredQuestions = allQuestions
+
+  if (
+    body.filters?.confidenceLevels &&
+    body.filters.confidenceLevels.length > 0
+  ) {
+    const confidenceRows = await db
+      .select({ questionId: questionConfidence.questionId })
+      .from(questionConfidence)
+      .where(
+        and(
+          eq(questionConfidence.userId, userId),
+          inArray(
+            questionConfidence.questionId,
+            filteredQuestions.map((q) => q.id),
+          ),
+          inArray(questionConfidence.level, body.filters.confidenceLevels),
+        ),
+      )
+    const confidenceIds = new Set(
+      confidenceRows.map((r) => r.questionId),
+    )
+    filteredQuestions = filteredQuestions.filter((q) =>
+      confidenceIds.has(q.id),
+    )
+  }
+
+  if (filteredQuestions.length === 0) {
+    throw new AppError(
+      'No questions match the selected filters',
+      400,
+    )
+  }
+
+  const shuffledQuestionIds = shuffleArray(
+    filteredQuestions.map((q) => q.id),
+  )
   const timestamp = now()
   const sessionId = generateUlid()
 
@@ -59,14 +97,14 @@ app.post('/', async (c) => {
     mode: body.mode,
     status: 'in_progress',
     questionOrder: JSON.stringify(shuffledQuestionIds),
-    totalQuestions: allQuestions.length,
+    totalQuestions: filteredQuestions.length,
     startedAt: timestamp,
   })
 
   const allChoices = await db.query.choices.findMany({
     where: inArray(
       choices.questionId,
-      allQuestions.map((q) => q.id),
+      filteredQuestions.map((q) => q.id),
     ),
     orderBy: (ch, { asc }) => [asc(ch.sortOrder)],
   })
@@ -81,7 +119,7 @@ app.post('/', async (c) => {
     choicesByQuestion.set(c.questionId, list)
   }
 
-  const sessionAnswerValues = allQuestions.map((q) => {
+  const sessionAnswerValues = filteredQuestions.map((q) => {
     const qChoices = choicesByQuestion.get(q.id) ?? []
     const shuffledChoiceIds = shuffleArray(qChoices.map((ch) => ch.id))
     const snapshot = JSON.stringify({
@@ -115,7 +153,7 @@ app.post('/', async (c) => {
         id: sessionId,
         questionSetId: body.questionSetId,
         mode: body.mode,
-        totalQuestions: allQuestions.length,
+        totalQuestions: filteredQuestions.length,
         timeLimit: questionSet.timeLimit,
       },
     },
@@ -123,17 +161,63 @@ app.post('/', async (c) => {
   )
 })
 
+app.post('/preview-filter', async (c) => {
+  const db = c.get('db')
+  const userId = c.get('userId')
+  const body = previewFilterSchema.parse(await c.req.json())
+
+  const questionSet = await db.query.questionSets.findFirst({
+    where: and(
+      eq(questionSets.id, body.questionSetId),
+      eq(questionSets.userId, userId),
+    ),
+  })
+  if (!questionSet) {
+    throw new AppError('Question set not found', 404)
+  }
+
+  const allQuestions = await db.query.questions.findMany({
+    where: eq(questions.questionSetId, body.questionSetId),
+  })
+
+  const questionIds = allQuestions.map((q) => q.id)
+
+  const confidenceByQuestion: Record<string, number> = {}
+  if (questionIds.length > 0) {
+    const confidenceRows = await db
+      .select({
+        questionId: questionConfidence.questionId,
+        level: questionConfidence.level,
+      })
+      .from(questionConfidence)
+      .where(
+        and(
+          eq(questionConfidence.userId, userId),
+          inArray(questionConfidence.questionId, questionIds),
+        ),
+      )
+
+    for (const row of confidenceRows) {
+      confidenceByQuestion[row.questionId] = row.level
+    }
+  }
+
+  return c.json({
+    success: true,
+    data: {
+      totalQuestions: allQuestions.length,
+      confidenceByQuestion,
+    },
+  })
+})
+
 app.get('/:id/questions/:index', async (c) => {
   const db = c.get('db')
+  const userId = c.get('userId')
   const sessionId = c.req.param('id')
   const index = parseInt(c.req.param('index'), 10)
 
-  const session = await db.query.examSessions.findFirst({
-    where: eq(examSessions.id, sessionId),
-  })
-  if (!session) {
-    throw new AppError('Session not found', 404)
-  }
+  const session = await getSessionForUser(db, sessionId, userId)
 
   const questionOrder: string[] = JSON.parse(session.questionOrder)
   if (index < 0 || index >= questionOrder.length) {
@@ -177,7 +261,6 @@ app.get('/:id/questions/:index', async (c) => {
       body: snapshot.body,
       isMultiAnswer: snapshot.isMultiAnswer,
       choices: orderedChoices,
-      isFlagged: answer.isFlagged,
       isAnswered: answer.isCorrect !== null,
       selectedChoiceIds: selectedChoices.map((sc) => sc.choiceId),
     },
@@ -186,14 +269,13 @@ app.get('/:id/questions/:index', async (c) => {
 
 app.post('/:id/answers', async (c) => {
   const db = c.get('db')
+  const userId = c.get('userId')
   const sessionId = c.req.param('id')
   const body = submitAnswerSchema.parse(await c.req.json())
 
-  const session = await db.query.examSessions.findFirst({
-    where: eq(examSessions.id, sessionId),
-  })
-  if (!session || session.status !== 'in_progress') {
-    throw new AppError('Session not found or already completed', 400)
+  const session = await getSessionForUser(db, sessionId, userId)
+  if (session.status !== 'in_progress') {
+    throw new AppError('Session already completed', 400)
   }
 
   const answer = await db.query.sessionAnswers.findFirst({
@@ -240,7 +322,6 @@ app.post('/:id/answers', async (c) => {
   }
 
   if (!isCorrect) {
-    const userId = c.get('userId')
     c.executionCtx.waitUntil(
       (async () => {
         try {
@@ -295,41 +376,15 @@ app.post('/:id/answers', async (c) => {
   return c.json({ success: true, data: { received: true } })
 })
 
-app.post('/:id/flag', async (c) => {
-  const db = c.get('db')
-  const sessionId = c.req.param('id')
-  const { questionId, isFlagged } = flagQuestionSchema.parse(
-    await c.req.json(),
-  )
-
-  const answer = await db.query.sessionAnswers.findFirst({
-    where: and(
-      eq(sessionAnswers.sessionId, sessionId),
-      eq(sessionAnswers.questionId, questionId),
-    ),
-  })
-  if (!answer) {
-    throw new AppError('Question not found in session', 404)
-  }
-
-  await db
-    .update(sessionAnswers)
-    .set({ isFlagged })
-    .where(eq(sessionAnswers.id, answer.id))
-
-  return c.json({ success: true })
-})
-
 app.post('/:id/complete', async (c) => {
   const db = c.get('db')
+  const userId = c.get('userId')
   const sessionId = c.req.param('id')
   const body = completeSessionSchema.parse(await c.req.json())
 
-  const session = await db.query.examSessions.findFirst({
-    where: eq(examSessions.id, sessionId),
-  })
-  if (!session || session.status !== 'in_progress') {
-    throw new AppError('Session not found or already completed', 400)
+  const session = await getSessionForUser(db, sessionId, userId)
+  if (session.status !== 'in_progress') {
+    throw new AppError('Session already completed', 400)
   }
 
   const answers = await db.query.sessionAnswers.findMany({
@@ -368,12 +423,7 @@ app.get('/:id/results', async (c) => {
   const userId = c.get('userId')
   const sessionId = c.req.param('id')
 
-  const session = await db.query.examSessions.findFirst({
-    where: eq(examSessions.id, sessionId),
-  })
-  if (!session) {
-    throw new AppError('Session not found', 404)
-  }
+  const session = await getSessionForUser(db, sessionId, userId)
 
   const answers = await db.query.sessionAnswers.findMany({
     where: eq(sessionAnswers.sessionId, sessionId),
@@ -428,7 +478,6 @@ app.get('/:id/results', async (c) => {
         explanation: snapshot.explanation,
         isMultiAnswer: snapshot.isMultiAnswer,
         isCorrect: answer.isCorrect,
-        isFlagged: answer.isFlagged,
         timeSpentSec: answer.timeSpentSec,
         confidenceLevel: confidenceMap.get(questionId) ?? 0,
         selectedChoiceIds: choicesByAnswer.get(answer.id) ?? [],
