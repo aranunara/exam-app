@@ -19,7 +19,7 @@ export const questionSets = sqliteTable(
     title: text('title').notNull(),
     description: text('description'),
     timeLimit: integer('time_limit'),
-    isPublished: integer('is_published', { mode: 'boolean' }).default(false),
+    isPublished: integer('is_published', { mode: 'boolean' }).default(true),
     createdAt: text('created_at').notNull(),
     updatedAt: text('updated_at').notNull(),
   },
