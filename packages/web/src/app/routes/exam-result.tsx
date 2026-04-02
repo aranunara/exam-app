@@ -301,7 +301,7 @@ function QuestionReviewList({ results }: { results: SessionResult['results'] }) 
 }
 
 export default function ExamResultPage() {
-  const { questionSetId } = useParams<{ questionSetId: string }>()
+  const { workbookId } = useParams<{ workbookId: string }>()
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -384,7 +384,7 @@ export default function ExamResultPage() {
         <h1 className="text-2xl font-bold">試験結果</h1>
         <div className="flex gap-2">
           <button
-            onClick={() => navigate(`/exam/${questionSetId}`)}
+            onClick={() => navigate(`/exam/${workbookId}`)}
             className="rounded-lg border px-4 py-2 text-sm hover:bg-muted"
           >
             再受験

@@ -1,6 +1,6 @@
-export { categories } from './categories'
+export { subjects } from './subjects'
 export { tags } from './tags'
-export { questionSets, questionSetTags } from './question-sets'
+export { workbooks, workbookTags } from './workbooks'
 export { questions, questionTags } from './questions'
 export { choices } from './choices'
 export {

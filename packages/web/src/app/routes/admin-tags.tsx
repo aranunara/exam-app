@@ -191,7 +191,7 @@ function TagCard({
     return (
       <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-5 shadow-sm">
         <p className="text-sm">
-          <strong>{tag.name}</strong> を削除しますか？問題セットや問題との関連付けも解除されます。
+          <strong>{tag.name}</strong> を削除しますか？問題集や問題との関連付けも解除されます。
         </p>
         <div className="mt-4 flex gap-2">
           <button
@@ -319,7 +319,7 @@ export default function AdminTagsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">タグ</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            問題セットや問題の分類タグを管理します。
+            問題集や問題の分類タグを管理します。
           </p>
         </div>
         {!showCreateForm && (

@@ -1,5 +1,5 @@
 import { sqliteTable, text, integer, index, primaryKey } from 'drizzle-orm/sqlite-core'
-import { questionSets } from './question-sets'
+import { workbooks } from './workbooks'
 import { questions } from './questions'
 
 export const examSessions = sqliteTable(
@@ -7,9 +7,9 @@ export const examSessions = sqliteTable(
   {
     id: text('id').primaryKey(),
     userId: text('user_id').notNull(),
-    questionSetId: text('question_set_id')
+    workbookId: text('question_set_id')
       .notNull()
-      .references(() => questionSets.id),
+      .references(() => workbooks.id),
     mode: text('mode', { enum: ['practice', 'exam'] }).notNull(),
     status: text('status', {
       enum: ['in_progress', 'completed', 'abandoned'],
@@ -24,7 +24,7 @@ export const examSessions = sqliteTable(
   },
   (table) => [
     index('idx_exam_sessions_user_id').on(table.userId),
-    index('idx_exam_sessions_question_set_id').on(table.questionSetId),
+    index('idx_exam_sessions_question_set_id').on(table.workbookId),
     index('idx_exam_sessions_status').on(table.status),
     index('idx_exam_sessions_user_status').on(table.userId, table.status),
   ],

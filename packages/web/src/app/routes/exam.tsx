@@ -50,7 +50,7 @@ function ExamTimer() {
 
 type CreateSessionResponse = ApiResponse<{
   id: string
-  questionSetId: string
+  workbookId: string
   mode: 'practice' | 'exam'
   totalQuestions: number
   timeLimit: number | null
@@ -59,7 +59,7 @@ type CreateSessionResponse = ApiResponse<{
 type AnswerReceivedResponse = ApiResponse<{ received: true }>
 
 export default function ExamPage() {
-  const { questionSetId } = useParams<{ questionSetId: string }>()
+  const { workbookId } = useParams<{ workbookId: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const sessionId = useSessionId()
@@ -91,7 +91,7 @@ export default function ExamPage() {
   const createSessionMutation = useMutation({
     mutationFn: () =>
       api.post<CreateSessionResponse>('/sessions', {
-        questionSetId,
+        workbookId,
         mode: 'exam',
       }),
     onSuccess: (response) => {
@@ -119,7 +119,7 @@ export default function ExamPage() {
       reset()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [questionSetId])
+  }, [workbookId])
 
   useEffect(() => {
     if (isConfirmed) {
@@ -154,7 +154,7 @@ export default function ExamPage() {
       })
       complete()
       await queryClient.invalidateQueries({ queryKey: ['stats'] })
-      navigate(`/exam/${questionSetId}/result`, {
+      navigate(`/exam/${workbookId}/result`, {
         state: { sessionId },
       })
     } catch (error) {
@@ -162,7 +162,7 @@ export default function ExamPage() {
         error instanceof Error ? error.message : 'Failed to complete exam',
       )
     }
-  }, [sessionId, questionSetId, navigate, complete, queryClient])
+  }, [sessionId, workbookId, navigate, complete, queryClient])
 
   const handleAbort = useCallback(async () => {
     if (sessionId) {

@@ -5,17 +5,17 @@ import {
   primaryKey,
   index,
 } from 'drizzle-orm/sqlite-core'
-import { categories } from './categories'
+import { subjects } from './subjects'
 import { tags } from './tags'
 
-export const questionSets = sqliteTable(
+export const workbooks = sqliteTable(
   'question_sets',
   {
     id: text('id').primaryKey(),
     userId: text('user_id').notNull(),
-    categoryId: text('category_id')
+    subjectId: text('category_id')
       .notNull()
-      .references(() => categories.id),
+      .references(() => subjects.id),
     title: text('title').notNull(),
     description: text('description'),
     timeLimit: integer('time_limit'),
@@ -26,15 +26,15 @@ export const questionSets = sqliteTable(
   (table) => [index('idx_question_sets_user_id').on(table.userId)],
 )
 
-export const questionSetTags = sqliteTable(
+export const workbookTags = sqliteTable(
   'question_set_tags',
   {
-    questionSetId: text('question_set_id')
+    workbookId: text('question_set_id')
       .notNull()
-      .references(() => questionSets.id, { onDelete: 'cascade' }),
+      .references(() => workbooks.id, { onDelete: 'cascade' }),
     tagId: text('tag_id')
       .notNull()
       .references(() => tags.id, { onDelete: 'cascade' }),
   },
-  (table) => [primaryKey({ columns: [table.questionSetId, table.tagId] })],
+  (table) => [primaryKey({ columns: [table.workbookId, table.tagId] })],
 )

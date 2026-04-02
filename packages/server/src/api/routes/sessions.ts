@@ -5,7 +5,7 @@ import {
   examSessions,
   sessionAnswers,
   sessionAnswerChoices,
-  questionSets,
+  workbooks,
   questions,
   choices,
   questionConfidence,
@@ -30,19 +30,19 @@ app.post('/', async (c) => {
   const userId = c.get('userId')
   const body = createSessionSchema.parse(await c.req.json())
 
-  const questionSet = await db.query.questionSets.findFirst({
+  const workbook = await db.query.workbooks.findFirst({
     where: and(
-      eq(questionSets.id, body.questionSetId),
-      eq(questionSets.userId, userId),
-      eq(questionSets.isPublished, true),
+      eq(workbooks.id, body.workbookId),
+      eq(workbooks.userId, userId),
+      eq(workbooks.isPublished, true),
     ),
   })
-  if (!questionSet) {
-    throw new AppError('Question set not found or not published', 404)
+  if (!workbook) {
+    throw new AppError('Workbook not found or not published', 404)
   }
 
   const allQuestions = await db.query.questions.findMany({
-    where: eq(questions.questionSetId, body.questionSetId),
+    where: eq(questions.workbookId, body.workbookId),
     orderBy: (q, { asc }) => [asc(q.sortOrder)],
   })
 
@@ -93,7 +93,7 @@ app.post('/', async (c) => {
   await db.insert(examSessions).values({
     id: sessionId,
     userId,
-    questionSetId: body.questionSetId,
+    workbookId: body.workbookId,
     mode: body.mode,
     status: 'in_progress',
     questionOrder: JSON.stringify(shuffledQuestionIds),
@@ -151,10 +151,10 @@ app.post('/', async (c) => {
       success: true,
       data: {
         id: sessionId,
-        questionSetId: body.questionSetId,
+        workbookId: body.workbookId,
         mode: body.mode,
         totalQuestions: filteredQuestions.length,
-        timeLimit: questionSet.timeLimit,
+        timeLimit: workbook.timeLimit,
       },
     },
     201,
@@ -166,18 +166,18 @@ app.post('/preview-filter', async (c) => {
   const userId = c.get('userId')
   const body = previewFilterSchema.parse(await c.req.json())
 
-  const questionSet = await db.query.questionSets.findFirst({
+  const workbook = await db.query.workbooks.findFirst({
     where: and(
-      eq(questionSets.id, body.questionSetId),
-      eq(questionSets.userId, userId),
+      eq(workbooks.id, body.workbookId),
+      eq(workbooks.userId, userId),
     ),
   })
-  if (!questionSet) {
-    throw new AppError('Question set not found', 404)
+  if (!workbook) {
+    throw new AppError('Workbook not found', 404)
   }
 
   const allQuestions = await db.query.questions.findMany({
-    where: eq(questions.questionSetId, body.questionSetId),
+    where: eq(questions.workbookId, body.workbookId),
   })
 
   const questionIds = allQuestions.map((q) => q.id)

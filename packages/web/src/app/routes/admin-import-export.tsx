@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api-client'
 import { queryKeys } from '@/lib/query-keys'
 import { ErrorMessage } from '@/components/shared/error-message'
-import type { ApiResponse, QuestionSet } from '@/types'
+import type { ApiResponse, Workbook } from '@/types'
 
 interface ImportPreview {
   title: string
@@ -22,7 +22,7 @@ function LoadingSkeleton() {
   )
 }
 
-function ExportSection({ questionSets }: { questionSets: QuestionSet[] }) {
+function ExportSection({ workbooks }: { workbooks: Workbook[] }) {
   const [selectedId, setSelectedId] = useState('')
   const [isExporting, setIsExporting] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
@@ -35,7 +35,7 @@ function ExportSection({ questionSets }: { questionSets: QuestionSet[] }) {
 
     try {
       const response = await api.get<ApiResponse<unknown>>(
-        `/question-sets/${selectedId}/export`,
+        `/workbooks/${selectedId}/export`,
       )
 
       const blob = new Blob([JSON.stringify(response.data, null, 2)], {
@@ -43,7 +43,7 @@ function ExportSection({ questionSets }: { questionSets: QuestionSet[] }) {
       })
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
-      const selectedSet = questionSets.find((s) => s.id === selectedId)
+      const selectedSet = workbooks.find((s) => s.id === selectedId)
       const filename = selectedSet
         ? `${selectedSet.title.replace(/[^a-zA-Z0-9]/g, '_')}.json`
         : 'export.json'
@@ -67,7 +67,7 @@ function ExportSection({ questionSets }: { questionSets: QuestionSet[] }) {
     <div className="rounded-lg border bg-card p-6">
       <h2 className="mb-4 text-lg font-semibold">エクスポート</h2>
       <p className="mb-4 text-sm text-muted-foreground">
-        エクスポートする問題セットを選択してください。
+        エクスポートする問題集を選択してください。
       </p>
 
       {exportError && (
@@ -82,7 +82,7 @@ function ExportSection({ questionSets }: { questionSets: QuestionSet[] }) {
             htmlFor="export-select"
             className="mb-1 block text-sm font-medium"
           >
-            問題セット
+            問題集
           </label>
           <select
             id="export-select"
@@ -90,8 +90,8 @@ function ExportSection({ questionSets }: { questionSets: QuestionSet[] }) {
             onChange={(e) => setSelectedId(e.target.value)}
             className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <option value="">問題セットを選択</option>
-            {questionSets.map((set) => (
+            <option value="">問題集を選択</option>
+            {workbooks.map((set) => (
               <option key={set.id} value={set.id}>
                 {set.title}
               </option>
@@ -120,9 +120,9 @@ function ImportSection() {
 
   const importMutation = useMutation({
     mutationFn: (data: unknown) =>
-      api.post<ApiResponse<QuestionSet>>('/question-sets/import', data),
+      api.post<ApiResponse<Workbook>>('/workbooks/import', data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.questionSets.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.workbooks.all })
       setPreview(null)
       setImportSuccess(true)
       setParseError(null)
@@ -199,7 +199,7 @@ function ImportSection() {
     <div className="rounded-lg border bg-card p-6">
       <h2 className="mb-4 text-lg font-semibold">インポート</h2>
       <p className="mb-4 text-sm text-muted-foreground">
-        JSON ファイルをアップロードして問題セットをインポートします。
+        JSON ファイルをアップロードして問題集をインポートします。
       </p>
 
       {parseError && (
@@ -210,7 +210,7 @@ function ImportSection() {
 
       {importSuccess && (
         <div className="mb-4 rounded-lg border border-success/30 bg-success-muted p-4 text-sm text-success-foreground">
-          問題セットのインポートが完了しました。
+          問題集のインポートが完了しました。
         </div>
       )}
 
@@ -282,9 +282,9 @@ function ImportSection() {
 
 export default function AdminImportExportPage() {
   const setsQuery = useQuery({
-    queryKey: queryKeys.questionSets.all,
+    queryKey: queryKeys.workbooks.all,
     queryFn: () =>
-      api.get<ApiResponse<QuestionSet[]>>('/question-sets'),
+      api.get<ApiResponse<Workbook[]>>('/workbooks'),
   })
 
   if (setsQuery.isLoading) {
@@ -295,7 +295,7 @@ export default function AdminImportExportPage() {
     return <ErrorMessage message={setsQuery.error.message} />
   }
 
-  const questionSets = setsQuery.data?.data ?? []
+  const workbooks = setsQuery.data?.data ?? []
 
   return (
     <div className="space-y-6">
@@ -304,11 +304,11 @@ export default function AdminImportExportPage() {
           インポート / エクスポート
         </h1>
         <p className="mt-1 text-muted-foreground">
-          問題セットを JSON でエクスポート、またはファイルからインポートします。
+          問題集を JSON でエクスポート、またはファイルからインポートします。
         </p>
       </div>
 
-      <ExportSection questionSets={questionSets} />
+      <ExportSection workbooks={workbooks} />
       <ImportSection />
     </div>
   )

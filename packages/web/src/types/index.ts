@@ -10,7 +10,7 @@ export interface ApiResponse<T> {
   }
 }
 
-export interface Category {
+export interface Subject {
   id: string
   userId: string
   name: string
@@ -42,7 +42,7 @@ export interface Choice {
 
 export interface Question {
   id: string
-  questionSetId: string
+  workbookId: string
   body: string
   explanation: string | null
   isMultiAnswer: boolean
@@ -54,10 +54,10 @@ export interface Question {
   tagIds: string[]
 }
 
-export interface QuestionSet {
+export interface Workbook {
   id: string
   userId: string
-  categoryId: string
+  subjectId: string
   title: string
   description: string | null
   timeLimit: number | null
@@ -79,8 +79,8 @@ export interface ExamSession {
   startedAt: string
   completedAt: string | null
   timeSpentSec: number | null
-  questionSetTitle?: string
-  categoryName?: string
+  workbookTitle?: string
+  subjectName?: string
 }
 
 export interface SessionQuestion {
@@ -139,9 +139,9 @@ export interface StatsOverview {
   avgScore: number
 }
 
-export interface CategoryStats {
-  categoryId: string
-  categoryName: string
+export interface SubjectStats {
+  subjectId: string
+  subjectName: string
   sessions: number
   avgScore: number
   totalQuestions: number
@@ -157,8 +157,8 @@ export interface TagStats {
   correctRate: number
 }
 
-export interface QuestionSetScore {
-  questionSetId: string
+export interface WorkbookScore {
+  workbookId: string
   recentScores: number[]
   recentAvg: number | null
   attempts: number
@@ -166,6 +166,6 @@ export interface QuestionSetScore {
 }
 
 export interface HistoryEntry extends ExamSession {
-  questionSetTitle: string
-  categoryName: string
+  workbookTitle: string
+  subjectName: string
 }

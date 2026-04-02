@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 export const createSessionSchema = z.object({
-  questionSetId: z.string().min(1),
+  workbookId: z.string().min(1),
   mode: z.enum(['practice', 'exam']),
   filters: z
     .object({
@@ -11,7 +11,7 @@ export const createSessionSchema = z.object({
 })
 
 export const previewFilterSchema = z.object({
-  questionSetId: z.string().min(1),
+  workbookId: z.string().min(1),
 })
 
 export const submitAnswerSchema = z.object({

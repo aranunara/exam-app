@@ -10,7 +10,7 @@ import {
 import { generateUlid } from '../../lib/ulid'
 import { now } from '../../lib/timestamp'
 import { AppError } from '../middleware/error-handler'
-import { getQuestionSetForUser } from '../helpers/ownership'
+import { getWorkbookForUser } from '../helpers/ownership'
 
 const app = new Hono<Env>()
 
@@ -18,7 +18,7 @@ app.post('/:setId/questions', async (c) => {
   const db = c.get('db')
   const userId = c.get('userId')
   const setId = c.req.param('setId')
-  await getQuestionSetForUser(db, setId, userId)
+  await getWorkbookForUser(db, setId, userId)
   const body = createQuestionSchema.parse(await c.req.json())
   const timestamp = now()
 
@@ -28,7 +28,7 @@ app.post('/:setId/questions', async (c) => {
   const questionId = generateUlid()
   const question = {
     id: questionId,
-    questionSetId: setId,
+    workbookId: setId,
     body: body.body,
     explanation: body.explanation,
     isMultiAnswer,
@@ -77,7 +77,7 @@ app.put('/:setId/questions/:id', async (c) => {
   const db = c.get('db')
   const userId = c.get('userId')
   const setId = c.req.param('setId')
-  await getQuestionSetForUser(db, setId, userId)
+  await getWorkbookForUser(db, setId, userId)
   const id = c.req.param('id')
   const body = updateQuestionSchema.parse(await c.req.json())
 
@@ -151,7 +151,7 @@ app.delete('/:setId/questions/:id', async (c) => {
   const db = c.get('db')
   const userId = c.get('userId')
   const setId = c.req.param('setId')
-  await getQuestionSetForUser(db, setId, userId)
+  await getWorkbookForUser(db, setId, userId)
   const id = c.req.param('id')
 
   const existing = await db.query.questions.findFirst({
@@ -169,7 +169,7 @@ app.patch('/:setId/questions/reorder', async (c) => {
   const db = c.get('db')
   const userId = c.get('userId')
   const setId = c.req.param('setId')
-  await getQuestionSetForUser(db, setId, userId)
+  await getWorkbookForUser(db, setId, userId)
   const body = reorderQuestionsSchema.parse(await c.req.json())
 
   const timestamp = now()

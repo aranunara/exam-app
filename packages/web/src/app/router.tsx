@@ -8,23 +8,23 @@ import { LoadingSpinner } from '@/components/shared/loading-spinner'
 const SignInPage = lazy(() => import('@/app/routes/sign-in'))
 const SignUpPage = lazy(() => import('@/app/routes/sign-up'))
 const Dashboard = lazy(() => import('@/app/routes/dashboard'))
-const CategoryExams = lazy(() => import('@/app/routes/category-exams'))
+const SubjectExams = lazy(() => import('@/app/routes/subject-exams'))
 const Practice = lazy(() => import('@/app/routes/practice'))
 const Exam = lazy(() => import('@/app/routes/exam'))
 const ExamResult = lazy(() => import('@/app/routes/exam-result'))
 const Stats = lazy(() => import('@/app/routes/stats'))
 const HistoryDetail = lazy(() => import('@/app/routes/history-detail'))
-const AdminCategories = lazy(() => import('@/app/routes/admin-categories'))
-const AdminQuestionSets = lazy(() => import('@/app/routes/admin-question-sets'))
-const AdminQuestionSetEdit = lazy(
-  () => import('@/app/routes/admin-question-set-edit'),
+const AdminSubjects = lazy(() => import('@/app/routes/admin-subjects'))
+const AdminWorkbooks = lazy(() => import('@/app/routes/admin-workbooks'))
+const AdminWorkbookEdit = lazy(
+  () => import('@/app/routes/admin-workbook-edit'),
 )
 const AdminTags = lazy(() => import('@/app/routes/admin-tags'))
 const AdminImportExport = lazy(
   () => import('@/app/routes/admin-import-export'),
 )
-const QuestionSetHistory = lazy(
-  () => import('@/app/routes/question-set-history'),
+const WorkbookHistory = lazy(
+  () => import('@/app/routes/workbook-history'),
 )
 
 function SuspenseWrapper({ children }: { children: React.ReactNode }) {
@@ -78,15 +78,15 @@ export const router = createBrowserRouter([
         ),
       },
       {
-        path: 'exams/:categoryId',
+        path: 'exams/:subjectId',
         element: (
           <SuspenseWrapper>
-            <CategoryExams />
+            <SubjectExams />
           </SuspenseWrapper>
         ),
       },
       {
-        path: 'practice/:questionSetId',
+        path: 'practice/:workbookId',
         element: (
           <SuspenseWrapper>
             <Practice />
@@ -94,7 +94,7 @@ export const router = createBrowserRouter([
         ),
       },
       {
-        path: 'exam/:questionSetId',
+        path: 'exam/:workbookId',
         element: (
           <SuspenseWrapper>
             <Exam />
@@ -102,7 +102,7 @@ export const router = createBrowserRouter([
         ),
       },
       {
-        path: 'exam/:questionSetId/result',
+        path: 'exam/:workbookId/result',
         element: (
           <SuspenseWrapper>
             <ExamResult />
@@ -118,10 +118,10 @@ export const router = createBrowserRouter([
         ),
       },
       {
-        path: 'question-sets/:questionSetId/history',
+        path: 'workbooks/:workbookId/history',
         element: (
           <SuspenseWrapper>
-            <QuestionSetHistory />
+            <WorkbookHistory />
           </SuspenseWrapper>
         ),
       },
@@ -134,26 +134,26 @@ export const router = createBrowserRouter([
         ),
       },
       {
-        path: 'admin/categories',
+        path: 'admin/subjects',
         element: (
           <SuspenseWrapper>
-            <AdminCategories />
+            <AdminSubjects />
           </SuspenseWrapper>
         ),
       },
       {
-        path: 'admin/question-sets',
+        path: 'admin/workbooks',
         element: (
           <SuspenseWrapper>
-            <AdminQuestionSets />
+            <AdminWorkbooks />
           </SuspenseWrapper>
         ),
       },
       {
-        path: 'admin/question-sets/:id',
+        path: 'admin/workbooks/:id',
         element: (
           <SuspenseWrapper>
-            <AdminQuestionSetEdit />
+            <AdminWorkbookEdit />
           </SuspenseWrapper>
         ),
       },

@@ -231,19 +231,19 @@ function Pagination({
 
 const LIMIT = 20
 
-export default function QuestionSetHistoryPage() {
-  const { questionSetId } = useParams<{ questionSetId: string }>()
+export default function WorkbookHistoryPage() {
+  const { workbookId } = useParams<{ workbookId: string }>()
   const [page, setPage] = useState(1)
 
   const historyQuery = useQuery({
-    queryKey: queryKeys.stats.history(page, { questionSetId: questionSetId! }),
+    queryKey: queryKeys.stats.history(page, { workbookId: workbookId! }),
     queryFn: () =>
       api.get<ApiResponse<HistoryEntry[]>>('/stats/history', {
-        questionSetId: questionSetId!,
+        workbookId: workbookId!,
         page: String(page),
         limit: String(LIMIT),
       }),
-    enabled: !!questionSetId,
+    enabled: !!workbookId,
   })
 
   if (historyQuery.isLoading) {
@@ -256,7 +256,7 @@ export default function QuestionSetHistoryPage() {
 
   const entries = historyQuery.data?.data ?? []
   const meta = historyQuery.data?.meta
-  const title = entries[0]?.questionSetTitle ?? '履歴'
+  const title = entries[0]?.workbookTitle ?? '履歴'
 
   return (
     <div className="space-y-6">
@@ -275,7 +275,7 @@ export default function QuestionSetHistoryPage() {
 
       {entries.length === 0 ? (
         <div className="rounded-lg border bg-card p-8 text-center text-muted-foreground">
-          この問題セットの履歴はまだありません。
+          この問題集の履歴はまだありません。
         </div>
       ) : (
         <StaggerChildren className="space-y-3">

@@ -4,8 +4,8 @@ import type { Env } from '../../types'
 import {
   examSessions,
   sessionAnswers,
-  questionSets,
-  categories,
+  workbooks,
+  subjects,
   questionTags,
   tags,
 } from '../../db/schema'
@@ -14,17 +14,17 @@ const app = new Hono<Env>()
 
 function buildSessionFilters(
   userId: string,
-  opts: { categoryId?: string; questionSetId?: string },
+  opts: { subjectId?: string; workbookId?: string },
 ): SQL[] {
   const conditions: SQL[] = [
     eq(examSessions.userId, userId),
     eq(examSessions.status, 'completed'),
   ]
-  if (opts.questionSetId) {
-    conditions.push(eq(examSessions.questionSetId, opts.questionSetId))
+  if (opts.workbookId) {
+    conditions.push(eq(examSessions.workbookId, opts.workbookId))
   }
-  if (opts.categoryId) {
-    conditions.push(eq(questionSets.categoryId, opts.categoryId))
+  if (opts.subjectId) {
+    conditions.push(eq(workbooks.subjectId, opts.subjectId))
   }
   return conditions
 }
@@ -32,10 +32,10 @@ function buildSessionFilters(
 app.get('/overview', async (c) => {
   const db = c.get('db')
   const userId = c.get('userId')
-  const categoryId = c.req.query('categoryId')
-  const questionSetId = c.req.query('questionSetId')
+  const subjectId = c.req.query('subjectId')
+  const workbookId = c.req.query('workbookId')
 
-  const conditions = buildSessionFilters(userId, { categoryId, questionSetId })
+  const conditions = buildSessionFilters(userId, { subjectId, workbookId })
 
   let query = db
     .select({
@@ -47,10 +47,10 @@ app.get('/overview', async (c) => {
     .from(examSessions)
     .$dynamic()
 
-  if (categoryId) {
+  if (subjectId) {
     query = query.innerJoin(
-      questionSets,
-      eq(examSessions.questionSetId, questionSets.id),
+      workbooks,
+      eq(examSessions.workbookId, workbooks.id),
     )
   }
 
@@ -62,28 +62,28 @@ app.get('/overview', async (c) => {
   })
 })
 
-app.get('/categories', async (c) => {
+app.get('/subjects', async (c) => {
   const db = c.get('db')
   const userId = c.get('userId')
-  const categoryId = c.req.query('categoryId')
-  const questionSetId = c.req.query('questionSetId')
+  const subjectId = c.req.query('subjectId')
+  const workbookId = c.req.query('workbookId')
 
-  const conditions = buildSessionFilters(userId, { categoryId, questionSetId })
+  const conditions = buildSessionFilters(userId, { subjectId, workbookId })
 
   const results = await db
     .select({
-      categoryId: categories.id,
-      categoryName: categories.name,
+      subjectId: subjects.id,
+      subjectName: subjects.name,
       sessions: sql<number>`count(distinct ${examSessions.id})`,
       avgScore: sql<number>`avg(${examSessions.scorePercent})`,
       totalQuestions: sql<number>`sum(${examSessions.totalQuestions})`,
       totalCorrect: sql<number>`sum(${examSessions.correctCount})`,
     })
     .from(examSessions)
-    .innerJoin(questionSets, eq(examSessions.questionSetId, questionSets.id))
-    .innerJoin(categories, eq(questionSets.categoryId, categories.id))
+    .innerJoin(workbooks, eq(examSessions.workbookId, workbooks.id))
+    .innerJoin(subjects, eq(workbooks.subjectId, subjects.id))
     .where(and(...conditions))
-    .groupBy(categories.id, categories.name)
+    .groupBy(subjects.id, subjects.name)
 
   return c.json({
     success: true,
@@ -97,10 +97,10 @@ app.get('/categories', async (c) => {
 app.get('/tags', async (c) => {
   const db = c.get('db')
   const userId = c.get('userId')
-  const categoryId = c.req.query('categoryId')
-  const questionSetId = c.req.query('questionSetId')
+  const subjectId = c.req.query('subjectId')
+  const workbookId = c.req.query('workbookId')
 
-  const conditions = buildSessionFilters(userId, { categoryId, questionSetId })
+  const conditions = buildSessionFilters(userId, { subjectId, workbookId })
 
   let query = db
     .select({
@@ -119,10 +119,10 @@ app.get('/tags', async (c) => {
     .innerJoin(tags, eq(questionTags.tagId, tags.id))
     .$dynamic()
 
-  if (categoryId) {
+  if (subjectId) {
     query = query.innerJoin(
-      questionSets,
-      eq(examSessions.questionSetId, questionSets.id),
+      workbooks,
+      eq(examSessions.workbookId, workbooks.id),
     )
   }
 
@@ -145,13 +145,13 @@ app.get('/tags', async (c) => {
 app.get('/history', async (c) => {
   const db = c.get('db')
   const userId = c.get('userId')
-  const categoryId = c.req.query('categoryId')
-  const questionSetId = c.req.query('questionSetId')
+  const subjectId = c.req.query('subjectId')
+  const workbookId = c.req.query('workbookId')
   const page = parseInt(c.req.query('page') ?? '1', 10)
   const limit = parseInt(c.req.query('limit') ?? '20', 10)
   const offset = (page - 1) * limit
 
-  const conditions = buildSessionFilters(userId, { categoryId, questionSetId })
+  const conditions = buildSessionFilters(userId, { subjectId, workbookId })
 
   const sessions = await db
     .select({
@@ -164,12 +164,12 @@ app.get('/history', async (c) => {
       startedAt: examSessions.startedAt,
       completedAt: examSessions.completedAt,
       timeSpentSec: examSessions.timeSpentSec,
-      questionSetTitle: questionSets.title,
-      categoryName: categories.name,
+      workbookTitle: workbooks.title,
+      subjectName: subjects.name,
     })
     .from(examSessions)
-    .innerJoin(questionSets, eq(examSessions.questionSetId, questionSets.id))
-    .innerJoin(categories, eq(questionSets.categoryId, categories.id))
+    .innerJoin(workbooks, eq(examSessions.workbookId, workbooks.id))
+    .innerJoin(subjects, eq(workbooks.subjectId, subjects.id))
     .where(and(...conditions))
     .orderBy(desc(examSessions.startedAt))
     .limit(limit)
@@ -178,7 +178,7 @@ app.get('/history', async (c) => {
   const countResult = await db
     .select({ count: sql<number>`count(*)` })
     .from(examSessions)
-    .innerJoin(questionSets, eq(examSessions.questionSetId, questionSets.id))
+    .innerJoin(workbooks, eq(examSessions.workbookId, workbooks.id))
     .where(and(...conditions))
 
   const total = countResult[0]?.count ?? 0
@@ -193,10 +193,10 @@ app.get('/history', async (c) => {
 app.get('/weak-areas', async (c) => {
   const db = c.get('db')
   const userId = c.get('userId')
-  const categoryId = c.req.query('categoryId')
-  const questionSetId = c.req.query('questionSetId')
+  const subjectId = c.req.query('subjectId')
+  const workbookId = c.req.query('workbookId')
 
-  const conditions = buildSessionFilters(userId, { categoryId, questionSetId })
+  const conditions = buildSessionFilters(userId, { subjectId, workbookId })
 
   let query = db
     .select({
@@ -215,10 +215,10 @@ app.get('/weak-areas', async (c) => {
     .innerJoin(tags, eq(questionTags.tagId, tags.id))
     .$dynamic()
 
-  if (categoryId) {
+  if (subjectId) {
     query = query.innerJoin(
-      questionSets,
-      eq(examSessions.questionSetId, questionSets.id),
+      workbooks,
+      eq(examSessions.workbookId, workbooks.id),
     )
   }
 
@@ -243,28 +243,28 @@ app.get('/weak-areas', async (c) => {
   })
 })
 
-app.get('/question-set-scores', async (c) => {
+app.get('/workbook-scores', async (c) => {
   const db = c.get('db')
   const userId = c.get('userId')
-  const categoryId = c.req.query('categoryId')
-  const questionSetId = c.req.query('questionSetId')
+  const subjectId = c.req.query('subjectId')
+  const workbookId = c.req.query('workbookId')
   const limit = parseInt(c.req.query('limit') ?? '5', 10)
 
-  const conditions = buildSessionFilters(userId, { categoryId, questionSetId })
+  const conditions = buildSessionFilters(userId, { subjectId, workbookId })
 
   let query = db
     .select({
-      questionSetId: examSessions.questionSetId,
+      workbookId: examSessions.workbookId,
       scorePercent: examSessions.scorePercent,
       completedAt: examSessions.completedAt,
     })
     .from(examSessions)
     .$dynamic()
 
-  if (categoryId) {
+  if (subjectId) {
     query = query.innerJoin(
-      questionSets,
-      eq(examSessions.questionSetId, questionSets.id),
+      workbooks,
+      eq(examSessions.workbookId, workbooks.id),
     )
   }
 
@@ -278,16 +278,16 @@ app.get('/question-set-scores', async (c) => {
   > = {}
 
   for (const s of sessions) {
-    if (!grouped[s.questionSetId]) {
-      grouped[s.questionSetId] = { scores: [], lastPlayedAt: s.completedAt }
+    if (!grouped[s.workbookId]) {
+      grouped[s.workbookId] = { scores: [], lastPlayedAt: s.completedAt }
     }
-    if (grouped[s.questionSetId].scores.length < limit) {
-      grouped[s.questionSetId].scores.push(s.scorePercent ?? 0)
+    if (grouped[s.workbookId].scores.length < limit) {
+      grouped[s.workbookId].scores.push(s.scorePercent ?? 0)
     }
   }
 
-  const data = Object.entries(grouped).map(([qsId, v]) => ({
-    questionSetId: qsId,
+  const data = Object.entries(grouped).map(([wbId, v]) => ({
+    workbookId: wbId,
     recentScores: v.scores,
     recentAvg:
       v.scores.length > 0

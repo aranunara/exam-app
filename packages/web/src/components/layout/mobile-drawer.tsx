@@ -60,7 +60,7 @@ export const MobileDrawer = forwardRef<HTMLDivElement, MobileDrawerProps>(
                   </Link>
                 ))}
                 <Link
-                  to="/admin/categories"
+                  to="/admin/subjects"
                   onClick={onClose}
                   className={cn(
                     'block rounded-md px-3 py-2.5 text-sm transition-colors',
@@ -87,9 +87,9 @@ export const MobileDrawer = forwardRef<HTMLDivElement, MobileDrawerProps>(
                         className={cn(
                           'block rounded-md px-3 py-2.5 text-sm transition-colors',
                           location.pathname === item.to ||
-                            (item.to === '/admin/question-sets' &&
+                            (item.to === '/admin/workbooks' &&
                               location.pathname.startsWith(
-                                '/admin/question-sets',
+                                '/admin/workbooks',
                               ))
                             ? 'bg-background font-medium text-foreground shadow-sm'
                             : 'text-muted-foreground hover:text-foreground',

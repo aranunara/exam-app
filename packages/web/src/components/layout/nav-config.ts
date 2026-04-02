@@ -25,8 +25,8 @@ export const navItems: NavItem[] = [
 ]
 
 export const adminNavItems: NavItem[] = [
-  { to: '/admin/question-sets', label: '問題セット' },
-  { to: '/admin/categories', label: 'カテゴリ' },
+  { to: '/admin/workbooks', label: '問題集' },
+  { to: '/admin/subjects', label: '科目' },
   { to: '/admin/tags', label: 'タグ' },
   { to: '/admin/import-export', label: 'インポート/エクスポート' },
 ]
@@ -42,8 +42,8 @@ export const sidebarNavGroups: NavGroup[] = [
   {
     label: '管理',
     items: [
-      { to: '/admin/question-sets', label: '問題セット', icon: FileListIcon },
-      { to: '/admin/categories', label: 'カテゴリ', icon: FolderIcon },
+      { to: '/admin/workbooks', label: '問題集', icon: FileListIcon },
+      { to: '/admin/subjects', label: '科目', icon: FolderIcon },
       { to: '/admin/tags', label: 'タグ', icon: TagIcon },
       { to: '/admin/import-export', label: 'インポート/エクスポート', icon: ArrowsIcon },
     ],

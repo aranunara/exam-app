@@ -4,34 +4,34 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api-client'
 import { queryKeys } from '@/lib/query-keys'
 import { ErrorMessage } from '@/components/shared/error-message'
-import type { ApiResponse, Category, QuestionSet } from '@/types'
+import type { ApiResponse, Subject, Workbook } from '@/types'
 
 /* ─── Form types ─── */
 
-interface CategoryFormData {
+interface SubjectFormData {
   name: string
   description: string
   passScore: string
   sortOrder: string
 }
 
-const EMPTY_FORM: CategoryFormData = {
+const EMPTY_FORM: SubjectFormData = {
   name: '',
   description: '',
   passScore: '',
   sortOrder: '0',
 }
 
-function categoryToForm(category: Category): CategoryFormData {
+function subjectToForm(subject: Subject): SubjectFormData {
   return {
-    name: category.name,
-    description: category.description ?? '',
-    passScore: category.passScore !== null ? String(category.passScore) : '',
-    sortOrder: String(category.sortOrder),
+    name: subject.name,
+    description: subject.description ?? '',
+    passScore: subject.passScore !== null ? String(subject.passScore) : '',
+    sortOrder: String(subject.sortOrder),
   }
 }
 
-function formToPayload(form: CategoryFormData) {
+function formToPayload(form: SubjectFormData) {
   return {
     name: form.name,
     description: form.description || null,
@@ -40,22 +40,22 @@ function formToPayload(form: CategoryFormData) {
   }
 }
 
-/* ─── Category Form ─── */
+/* ─── Subject Form ─── */
 
-function CategoryForm({
+function SubjectForm({
   initialData,
   onSubmit,
   onCancel,
   isSubmitting,
 }: {
-  initialData: CategoryFormData
-  onSubmit: (data: CategoryFormData) => void
+  initialData: SubjectFormData
+  onSubmit: (data: SubjectFormData) => void
   onCancel: () => void
   isSubmitting: boolean
 }) {
-  const [form, setForm] = useState<CategoryFormData>(initialData)
+  const [form, setForm] = useState<SubjectFormData>(initialData)
 
-  function handleChange(field: keyof CategoryFormData, value: string) {
+  function handleChange(field: keyof SubjectFormData, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }))
   }
 
@@ -70,11 +70,11 @@ function CategoryForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <label htmlFor="category-name" className="mb-1.5 block text-sm font-medium">
+        <label htmlFor="subject-name" className="mb-1.5 block text-sm font-medium">
           名前
         </label>
         <input
-          id="category-name"
+          id="subject-name"
           type="text"
           required
           value={form.name}
@@ -84,11 +84,11 @@ function CategoryForm({
       </div>
 
       <div>
-        <label htmlFor="category-description" className="mb-1.5 block text-sm font-medium">
+        <label htmlFor="subject-description" className="mb-1.5 block text-sm font-medium">
           説明
         </label>
         <textarea
-          id="category-description"
+          id="subject-description"
           value={form.description}
           onChange={(e) => handleChange('description', e.target.value)}
           rows={2}
@@ -98,11 +98,11 @@ function CategoryForm({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label htmlFor="category-pass-score" className="mb-1.5 block text-sm font-medium">
+          <label htmlFor="subject-pass-score" className="mb-1.5 block text-sm font-medium">
             合格基準 (%)
           </label>
           <input
-            id="category-pass-score"
+            id="subject-pass-score"
             type="number"
             min="0"
             max="100"
@@ -112,11 +112,11 @@ function CategoryForm({
           />
         </div>
         <div>
-          <label htmlFor="category-sort-order" className="mb-1.5 block text-sm font-medium">
+          <label htmlFor="subject-sort-order" className="mb-1.5 block text-sm font-medium">
             表示順
           </label>
           <input
-            id="category-sort-order"
+            id="subject-sort-order"
             type="number"
             value={form.sortOrder}
             onChange={(e) => handleChange('sortOrder', e.target.value)}
@@ -145,11 +145,11 @@ function CategoryForm({
   )
 }
 
-/* ─── Category Card ─── */
+/* ─── Subject Card ─── */
 
-function CategoryCard({
-  category,
-  questionSetCount,
+function SubjectCard({
+  subject,
+  workbookCount,
   isEditing,
   isDeleting,
   onEdit,
@@ -161,15 +161,15 @@ function CategoryCard({
   isSubmitting,
   isDeletingPending,
 }: {
-  category: Category
-  questionSetCount: number
+  subject: Subject
+  workbookCount: number
   isEditing: boolean
   isDeleting: boolean
   onEdit: () => void
   onDelete: () => void
   onCancelEdit: () => void
   onCancelDelete: () => void
-  onSubmitEdit: (data: CategoryFormData) => void
+  onSubmitEdit: (data: SubjectFormData) => void
   onConfirmDelete: () => void
   isSubmitting: boolean
   isDeletingPending: boolean
@@ -177,9 +177,9 @@ function CategoryCard({
   if (isEditing) {
     return (
       <div className="rounded-2xl border bg-card p-5 shadow-sm">
-        <h3 className="mb-4 text-sm font-semibold text-muted-foreground">カテゴリを編集</h3>
-        <CategoryForm
-          initialData={categoryToForm(category)}
+        <h3 className="mb-4 text-sm font-semibold text-muted-foreground">科目を編集</h3>
+        <SubjectForm
+          initialData={subjectToForm(subject)}
           onSubmit={onSubmitEdit}
           onCancel={onCancelEdit}
           isSubmitting={isSubmitting}
@@ -192,7 +192,7 @@ function CategoryCard({
     return (
       <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-5 shadow-sm">
         <p className="text-sm">
-          <strong>{category.name}</strong> を削除しますか？関連する問題セットにも影響します。
+          <strong>{subject.name}</strong> を削除しますか？関連する問題集にも影響します。
         </p>
         <div className="mt-4 flex gap-2">
           <button
@@ -218,10 +218,10 @@ function CategoryCard({
       <div className="p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <h3 className="text-base font-bold">{category.name}</h3>
-            {category.description && (
+            <h3 className="text-base font-bold">{subject.name}</h3>
+            {subject.description && (
               <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
-                {category.description}
+                {subject.description}
               </p>
             )}
           </div>
@@ -251,33 +251,33 @@ function CategoryCard({
 
         {/* Meta badges */}
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          {category.passScore !== null && (
+          {subject.passScore !== null && (
             <span className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-              合格 {category.passScore}%
+              合格 {subject.passScore}%
             </span>
           )}
           <span className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-            {questionSetCount}セット
+            {workbookCount}セット
           </span>
         </div>
       </div>
 
-      {/* Footer: quick link to create question set */}
+      {/* Footer: quick link to create workbook */}
       <div className="flex items-center justify-between border-t bg-muted/20 px-5 py-3 dark:bg-muted/10">
         <Link
-          to={`/admin/question-sets?category=${category.id}`}
+          to={`/admin/workbooks?subject=${subject.id}`}
           className="text-xs font-medium text-primary hover:underline"
         >
-          問題セットを見る
+          問題集を見る
         </Link>
         <Link
-          to={`/admin/question-sets/new?categoryId=${category.id}`}
+          to={`/admin/workbooks/new?subjectId=${subject.id}`}
           className="inline-flex items-center gap-1 rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/20"
         >
           <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
             <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
           </svg>
-          問題セットを作成
+          問題集を作成
         </Link>
       </div>
     </div>
@@ -305,28 +305,28 @@ function LoadingSkeleton() {
 
 /* ─── Main Page ─── */
 
-export default function AdminCategoriesPage() {
+export default function AdminSubjectsPage() {
   const queryClient = useQueryClient()
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [mutationError, setMutationError] = useState<string | null>(null)
 
-  const categoriesQuery = useQuery({
-    queryKey: queryKeys.categories.all,
-    queryFn: () => api.get<ApiResponse<Category[]>>('/categories'),
+  const subjectsQuery = useQuery({
+    queryKey: queryKeys.subjects.all,
+    queryFn: () => api.get<ApiResponse<Subject[]>>('/subjects'),
   })
 
   const setsQuery = useQuery({
-    queryKey: queryKeys.questionSets.all,
-    queryFn: () => api.get<ApiResponse<QuestionSet[]>>('/question-sets'),
+    queryKey: queryKeys.workbooks.all,
+    queryFn: () => api.get<ApiResponse<Workbook[]>>('/workbooks'),
   })
 
   const createMutation = useMutation({
-    mutationFn: (data: CategoryFormData) =>
-      api.post<ApiResponse<Category>>('/categories', formToPayload(data)),
+    mutationFn: (data: SubjectFormData) =>
+      api.post<ApiResponse<Subject>>('/subjects', formToPayload(data)),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.categories.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.subjects.all })
       setShowCreateForm(false)
       setMutationError(null)
     },
@@ -334,10 +334,10 @@ export default function AdminCategoriesPage() {
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: CategoryFormData }) =>
-      api.put<ApiResponse<Category>>(`/categories/${id}`, formToPayload(data)),
+    mutationFn: ({ id, data }: { id: string; data: SubjectFormData }) =>
+      api.put<ApiResponse<Subject>>(`/subjects/${id}`, formToPayload(data)),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.categories.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.subjects.all })
       setEditingId(null)
       setMutationError(null)
     },
@@ -345,33 +345,33 @@ export default function AdminCategoriesPage() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.delete<ApiResponse<null>>(`/categories/${id}`),
+    mutationFn: (id: string) => api.delete<ApiResponse<null>>(`/subjects/${id}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.categories.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.subjects.all })
       setDeletingId(null)
       setMutationError(null)
     },
     onError: (error: Error) => setMutationError(error.message),
   })
 
-  if (categoriesQuery.isLoading) return <LoadingSkeleton />
-  if (categoriesQuery.error) return <ErrorMessage message={categoriesQuery.error.message} />
+  if (subjectsQuery.isLoading) return <LoadingSkeleton />
+  if (subjectsQuery.error) return <ErrorMessage message={subjectsQuery.error.message} />
 
-  const categories = categoriesQuery.data?.data ?? []
-  const questionSets = setsQuery.data?.data ?? []
+  const subjects = subjectsQuery.data?.data ?? []
+  const workbooks = setsQuery.data?.data ?? []
 
   const setCountMap = new Map<string, number>()
-  for (const qs of questionSets) {
-    setCountMap.set(qs.categoryId, (setCountMap.get(qs.categoryId) ?? 0) + 1)
+  for (const wb of workbooks) {
+    setCountMap.set(wb.subjectId, (setCountMap.get(wb.subjectId) ?? 0) + 1)
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">カテゴリ</h1>
+          <h1 className="text-2xl font-bold tracking-tight">科目</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            問題セットの分類を管理します。
+            問題集の分類を管理します。
           </p>
         </div>
         {!showCreateForm && (
@@ -391,8 +391,8 @@ export default function AdminCategoriesPage() {
 
       {showCreateForm && (
         <div className="rounded-2xl border bg-card p-5 shadow-sm">
-          <h2 className="mb-4 text-sm font-semibold text-muted-foreground">新規カテゴリ</h2>
-          <CategoryForm
+          <h2 className="mb-4 text-sm font-semibold text-muted-foreground">新規科目</h2>
+          <SubjectForm
             initialData={EMPTY_FORM}
             onSubmit={(data) => createMutation.mutate(data)}
             onCancel={() => { setShowCreateForm(false); setMutationError(null) }}
@@ -401,31 +401,31 @@ export default function AdminCategoriesPage() {
         </div>
       )}
 
-      {categories.length === 0 && !showCreateForm ? (
+      {subjects.length === 0 && !showCreateForm ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed py-16 text-center">
           <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
             <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground">
               <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
             </svg>
           </div>
-          <p className="text-sm font-medium text-muted-foreground">カテゴリがまだありません</p>
-          <p className="mt-1 text-xs text-muted-foreground/70">最初のカテゴリを作成してください</p>
+          <p className="text-sm font-medium text-muted-foreground">科目がまだありません</p>
+          <p className="mt-1 text-xs text-muted-foreground/70">最初の科目を作成してください</p>
         </div>
       ) : (
         <div className="space-y-3">
-          {categories.map((category) => (
-            <CategoryCard
-              key={category.id}
-              category={category}
-              questionSetCount={setCountMap.get(category.id) ?? 0}
-              isEditing={editingId === category.id}
-              isDeleting={deletingId === category.id}
-              onEdit={() => { setEditingId(category.id); setDeletingId(null); setMutationError(null) }}
-              onDelete={() => { setDeletingId(category.id); setEditingId(null); setMutationError(null) }}
+          {subjects.map((subject) => (
+            <SubjectCard
+              key={subject.id}
+              subject={subject}
+              workbookCount={setCountMap.get(subject.id) ?? 0}
+              isEditing={editingId === subject.id}
+              isDeleting={deletingId === subject.id}
+              onEdit={() => { setEditingId(subject.id); setDeletingId(null); setMutationError(null) }}
+              onDelete={() => { setDeletingId(subject.id); setEditingId(null); setMutationError(null) }}
               onCancelEdit={() => { setEditingId(null); setMutationError(null) }}
               onCancelDelete={() => { setDeletingId(null); setMutationError(null) }}
-              onSubmitEdit={(data) => updateMutation.mutate({ id: category.id, data })}
-              onConfirmDelete={() => deleteMutation.mutate(category.id)}
+              onSubmitEdit={(data) => updateMutation.mutate({ id: subject.id, data })}
+              onConfirmDelete={() => deleteMutation.mutate(subject.id)}
               isSubmitting={updateMutation.isPending}
               isDeletingPending={deleteMutation.isPending}
             />

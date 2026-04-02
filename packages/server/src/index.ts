@@ -7,9 +7,9 @@ import { createDb } from './db'
 import type { Env } from './types'
 import { authMiddleware } from './api/middleware/auth'
 import { errorHandler } from './api/middleware/error-handler'
-import categoriesRoutes from './api/routes/categories'
+import subjectsRoutes from './api/routes/subjects'
 import tagsRoutes from './api/routes/tags'
-import questionSetsRoutes from './api/routes/question-sets'
+import workbooksRoutes from './api/routes/workbooks'
 import questionsRoutes from './api/routes/questions'
 import sessionsRoutes from './api/routes/sessions'
 import statsRoutes from './api/routes/stats'
@@ -66,10 +66,10 @@ app.use('/api/*', authMiddleware)
 
 const api = app.basePath('/api/v1')
 
-api.route('/categories', categoriesRoutes)
+api.route('/subjects', subjectsRoutes)
 api.route('/tags', tagsRoutes)
-api.route('/question-sets', questionSetsRoutes)
-api.route('/question-sets', questionsRoutes)
+api.route('/workbooks', workbooksRoutes)
+api.route('/workbooks', questionsRoutes)
 api.route('/sessions', sessionsRoutes)
 api.route('/stats', statsRoutes)
 api.route('/confidence', confidenceRoutes)

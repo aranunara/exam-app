@@ -1,14 +1,14 @@
 import { sqliteTable, text, integer, primaryKey, index } from 'drizzle-orm/sqlite-core'
-import { questionSets } from './question-sets'
+import { workbooks } from './workbooks'
 import { tags } from './tags'
 
 export const questions = sqliteTable(
   'questions',
   {
     id: text('id').primaryKey(),
-    questionSetId: text('question_set_id')
+    workbookId: text('question_set_id')
       .notNull()
-      .references(() => questionSets.id, { onDelete: 'cascade' }),
+      .references(() => workbooks.id, { onDelete: 'cascade' }),
     body: text('body').notNull(),
     explanation: text('explanation'),
     isMultiAnswer: integer('is_multi_answer', { mode: 'boolean' }).default(false),
@@ -17,7 +17,7 @@ export const questions = sqliteTable(
     createdAt: text('created_at').notNull(),
     updatedAt: text('updated_at').notNull(),
   },
-  (table) => [index('idx_questions_question_set_id').on(table.questionSetId)],
+  (table) => [index('idx_questions_question_set_id').on(table.workbookId)],
 )
 
 export const questionTags = sqliteTable(

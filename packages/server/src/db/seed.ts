@@ -20,12 +20,12 @@ const managementTag = id()
 const architectureTag = id()
 const softwareEngTag = id()
 
-// --- Category IDs (referenced by question sets) ---
+// --- Subject IDs (referenced by workbooks) ---
 const catSAA = id()
 const catAP = id()
 const catCLF = id()
 
-// --- Question Set IDs ---
+// --- Workbook IDs ---
 const qsNetworking = id()
 const qsComputeStorage = id()
 const qsArchDesign = id()
@@ -35,7 +35,7 @@ const qsCloudConcepts = id()
 const qsSecCompliance = id()
 
 export const seedData = {
-  categories: [
+  subjects: [
     {
       id: catSAA,
       name: 'AWS Solutions Architect Associate',
@@ -76,14 +76,14 @@ export const seedData = {
     { id: softwareEngTag, name: 'Software Engineering', color: '#14B8A6', createdAt: timestamp },
   ],
 
-  questionSets: [
+  workbooks: [
     // ========================================
     // AWS SAA - Networking Basics
     // ========================================
     {
       set: {
         id: qsNetworking,
-        categoryId: catSAA,
+        subjectId: catSAA,
         title: 'AWS Networking Basics',
         description: 'VPC, Subnets, Route Tables, Security Groups',
         timeLimit: 1800,
@@ -144,7 +144,7 @@ export const seedData = {
     {
       set: {
         id: qsComputeStorage,
-        categoryId: catSAA,
+        subjectId: catSAA,
         title: 'AWS Compute & Storage',
         description: 'EC2, Lambda, S3, EBS fundamentals',
         timeLimit: 2400,
@@ -219,7 +219,7 @@ export const seedData = {
     {
       set: {
         id: qsArchDesign,
-        categoryId: catSAA,
+        subjectId: catSAA,
         title: 'AWS Architecture Design',
         description: 'Well-Architected Framework, high availability, scalability patterns',
         timeLimit: 1800,
@@ -280,7 +280,7 @@ export const seedData = {
     {
       set: {
         id: qsSecurity,
-        categoryId: catAP,
+        subjectId: catAP,
         title: '情報セキュリティ',
         description: '暗号化、認証、ネットワークセキュリティ',
         timeLimit: 2400,
@@ -355,7 +355,7 @@ export const seedData = {
     {
       set: {
         id: qsNetworkTech,
-        categoryId: catAP,
+        subjectId: catAP,
         title: 'ネットワーク技術',
         description: 'TCP/IP、DNS、ルーティング、プロトコル',
         timeLimit: 1800,
@@ -416,7 +416,7 @@ export const seedData = {
     {
       set: {
         id: qsCloudConcepts,
-        categoryId: catCLF,
+        subjectId: catCLF,
         title: 'Cloud Concepts',
         description: 'Cloud computing fundamentals, AWS global infrastructure',
         timeLimit: 1800,
@@ -491,7 +491,7 @@ export const seedData = {
     {
       set: {
         id: qsSecCompliance,
-        categoryId: catCLF,
+        subjectId: catCLF,
         title: 'Security & Compliance',
         description: 'IAM, security best practices, compliance programs',
         timeLimit: 1800,
@@ -559,7 +559,7 @@ interface ChoiceInfo {
 
 interface QuestionInfo {
   questionId: string
-  questionSetId: string
+  workbookId: string
   body: string
   explanation: string | null
   isMultiAnswer: boolean
@@ -636,14 +636,14 @@ async function main() {
     await db.delete(schema.choices).run()
     await db.delete(schema.questionTags).run()
     await db.delete(schema.questions).run()
-    await db.delete(schema.questionSetTags).run()
-    await db.delete(schema.questionSets).run()
+    await db.delete(schema.workbookTags).run()
+    await db.delete(schema.workbooks).run()
     await db.delete(schema.tags).run()
-    await db.delete(schema.categories).run()
+    await db.delete(schema.subjects).run()
 
-    // Insert categories
-    await db.insert(schema.categories).values(
-      seedData.categories.map((c) => ({ ...c, userId: seedUserId })),
+    // Insert subjects
+    await db.insert(schema.subjects).values(
+      seedData.subjects.map((c) => ({ ...c, userId: seedUserId })),
     ).run()
 
     // Insert tags
@@ -654,14 +654,14 @@ async function main() {
     let totalQuestions = 0
     const questionsBySet = new Map<string, QuestionInfo[]>()
 
-    for (const qs of seedData.questionSets) {
-      // Insert question set
-      await db.insert(schema.questionSets).values({ ...qs.set, userId: seedUserId }).run()
+    for (const qs of seedData.workbooks) {
+      // Insert workbook
+      await db.insert(schema.workbooks).values({ ...qs.set, userId: seedUserId }).run()
 
-      // Insert question set tags
+      // Insert workbook tags
       if (qs.tagIds.length > 0) {
-        await db.insert(schema.questionSetTags).values(
-          qs.tagIds.map((tagId) => ({ questionSetId: qs.set.id, tagId }))
+        await db.insert(schema.workbookTags).values(
+          qs.tagIds.map((tagId) => ({ workbookId: qs.set.id, tagId }))
         ).run()
       }
 
@@ -673,7 +673,7 @@ async function main() {
         // Insert question
         await db.insert(schema.questions).values({
           ...questionFields,
-          questionSetId: qs.set.id,
+          workbookId: qs.set.id,
           version: 1,
           createdAt: timestamp,
           updatedAt: timestamp,
@@ -704,7 +704,7 @@ async function main() {
 
         setQuestions.push({
           questionId: q.id,
-          questionSetId: qs.set.id,
+          workbookId: qs.set.id,
           body: q.body,
           explanation: q.explanation ?? null,
           isMultiAnswer: q.isMultiAnswer,
@@ -748,7 +748,7 @@ async function main() {
         await db.insert(schema.examSessions).values({
           id: sessionId,
           userId: seedUserId,
-          questionSetId: def.qsId,
+          workbookId: def.qsId,
           mode: def.mode,
           status: 'completed',
           questionOrder: JSON.stringify(questions.map((q) => q.questionId)),
@@ -812,9 +812,9 @@ async function main() {
     }
 
     console.info('Seed completed successfully.')
-    console.info(`  Categories: ${seedData.categories.length}`)
+    console.info(`  Subjects: ${seedData.subjects.length}`)
     console.info(`  Tags: ${seedData.tags.length}`)
-    console.info(`  Question Sets: ${seedData.questionSets.length}`)
+    console.info(`  Workbooks: ${seedData.workbooks.length}`)
     console.info(`  Questions: ${totalQuestions}`)
     console.info(`  Sessions: ${totalSessions} (userId: ${seedUserId})`)
   } catch (error) {

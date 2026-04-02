@@ -40,7 +40,7 @@ function SettingsIcon({ active }: { active?: boolean }) {
 const tabs: Tab[] = [
   { to: '/dashboard', label: 'ホーム', icon: HomeIcon, matchPrefixes: ['/dashboard', '/exams'] },
   { to: '/stats', label: '統計', icon: StatsTabIcon, matchPrefixes: ['/stats'] },
-  { to: '/admin/categories', label: '管理', icon: SettingsIcon, matchPrefixes: ['/admin'] },
+  { to: '/admin/subjects', label: '管理', icon: SettingsIcon, matchPrefixes: ['/admin'] },
 ]
 
 function isQuestionScreen(path: string): boolean {

@@ -2,23 +2,23 @@ import { Hono } from 'hono'
 import { eq, and, count, inArray } from 'drizzle-orm'
 import type { Env } from '../../types'
 import {
-  questionSets,
-  questionSetTags,
+  workbooks,
+  workbookTags,
   questions,
   questionTags,
   choices,
   tags,
 } from '../../db/schema'
 import {
-  createQuestionSetSchema,
-  updateQuestionSetSchema,
-} from '../validators/question-sets'
+  createWorkbookSchema,
+  updateWorkbookSchema,
+} from '../validators/workbooks'
 import { generateUlid } from '../../lib/ulid'
 import { now } from '../../lib/timestamp'
 import { AppError } from '../middleware/error-handler'
 import {
-  getCategoryForUser,
-  getQuestionSetForUser,
+  getSubjectForUser,
+  getWorkbookForUser,
 } from '../helpers/ownership'
 
 const app = new Hono<Env>()
@@ -39,9 +39,9 @@ async function verifyTagsOwnership(
   }
 }
 
-async function fetchQuestionsWithDetails(db: Database, questionSetId: string) {
+async function fetchQuestionsWithDetails(db: Database, workbookId: string) {
   const qs = await db.query.questions.findMany({
-    where: eq(questions.questionSetId, questionSetId),
+    where: eq(questions.workbookId, workbookId),
     orderBy: (q, { asc }) => [asc(q.sortOrder)],
   })
 
@@ -82,7 +82,7 @@ async function fetchQuestionsWithDetails(db: Database, questionSetId: string) {
 }
 
 function buildBulkQuestionValues(
-  setId: string,
+  workbookId: string,
   inputQuestions: Array<{
     body: string
     explanation?: string | null
@@ -99,7 +99,7 @@ function buildBulkQuestionValues(
 ) {
   const questionValues: Array<{
     id: string
-    questionSetId: string
+    workbookId: string
     body: string
     explanation: string | undefined | null
     isMultiAnswer: boolean
@@ -123,7 +123,7 @@ function buildBulkQuestionValues(
     const questionId = generateUlid()
     questionValues.push({
       id: questionId,
-      questionSetId: setId,
+      workbookId,
       body: q.body,
       explanation: q.explanation,
       isMultiAnswer: q.choices.filter((c) => c.isCorrect).length > 1,
@@ -157,12 +157,12 @@ function buildBulkQuestionValues(
 
 async function bulkInsertQuestions(
   db: Database,
-  setId: string,
+  workbookId: string,
   inputQuestions: Parameters<typeof buildBulkQuestionValues>[1],
   timestamp: string,
 ) {
   const { questionValues, choiceValues, tagValues } = buildBulkQuestionValues(
-    setId,
+    workbookId,
     inputQuestions,
     timestamp,
   )
@@ -181,44 +181,44 @@ async function bulkInsertQuestions(
 app.get('/', async (c) => {
   const db = c.get('db')
   const userId = c.get('userId')
-  const categoryId = c.req.query('categoryId')
+  const subjectId = c.req.query('subjectId')
   const published = c.req.query('published')
 
-  const conditions = [eq(questionSets.userId, userId)]
-  if (categoryId) {
-    conditions.push(eq(questionSets.categoryId, categoryId))
+  const conditions = [eq(workbooks.userId, userId)]
+  if (subjectId) {
+    conditions.push(eq(workbooks.subjectId, subjectId))
   }
   if (published === 'true') {
-    conditions.push(eq(questionSets.isPublished, true))
+    conditions.push(eq(workbooks.isPublished, true))
   } else if (published === 'false') {
-    conditions.push(eq(questionSets.isPublished, false))
+    conditions.push(eq(workbooks.isPublished, false))
   }
 
-  const result = await db.query.questionSets.findMany({
+  const result = await db.query.workbooks.findMany({
     where: and(...conditions),
-    orderBy: (qs, { desc }) => [desc(qs.createdAt)],
+    orderBy: (wb, { desc }) => [desc(wb.createdAt)],
   })
 
-  const resultIds = result.map((qs) => qs.id)
+  const resultIds = result.map((wb) => wb.id)
   const counts =
     resultIds.length > 0
       ? await db
           .select({
-            questionSetId: questions.questionSetId,
+            workbookId: questions.workbookId,
             questionCount: count(questions.id),
           })
           .from(questions)
-          .where(inArray(questions.questionSetId, resultIds))
-          .groupBy(questions.questionSetId)
+          .where(inArray(questions.workbookId, resultIds))
+          .groupBy(questions.workbookId)
       : []
 
   const countMap = new Map(
-    counts.map((c) => [c.questionSetId, c.questionCount]),
+    counts.map((c) => [c.workbookId, c.questionCount]),
   )
 
-  const data = result.map((qs) => ({
-    ...qs,
-    questionCount: countMap.get(qs.id) ?? 0,
+  const data = result.map((wb) => ({
+    ...wb,
+    questionCount: countMap.get(wb.id) ?? 0,
   }))
 
   return c.json({ success: true, data })
@@ -229,20 +229,20 @@ app.get('/:id', async (c) => {
   const userId = c.get('userId')
   const id = c.req.param('id')
 
-  const questionSet = await getQuestionSetForUser(db, id, userId)
+  const workbook = await getWorkbookForUser(db, id, userId)
 
-  const setTags = await db
+  const wbTags = await db
     .select()
-    .from(questionSetTags)
-    .where(eq(questionSetTags.questionSetId, id))
+    .from(workbookTags)
+    .where(eq(workbookTags.workbookId, id))
 
   const questionsWithDetails = await fetchQuestionsWithDetails(db, id)
 
   return c.json({
     success: true,
     data: {
-      ...questionSet,
-      tagIds: setTags.map((t) => t.tagId),
+      ...workbook,
+      tagIds: wbTags.map((t) => t.tagId),
       questions: questionsWithDetails,
     },
   })
@@ -251,19 +251,19 @@ app.get('/:id', async (c) => {
 app.post('/', async (c) => {
   const db = c.get('db')
   const userId = c.get('userId')
-  const body = createQuestionSetSchema.parse(await c.req.json())
+  const body = createWorkbookSchema.parse(await c.req.json())
   const timestamp = now()
 
-  await getCategoryForUser(db, body.categoryId, userId)
+  await getSubjectForUser(db, body.subjectId, userId)
   if (body.tagIds?.length) {
     await verifyTagsOwnership(db, body.tagIds, userId)
   }
 
-  const setId = generateUlid()
-  const questionSet = {
-    id: setId,
+  const workbookId = generateUlid()
+  const workbook = {
+    id: workbookId,
     userId,
-    categoryId: body.categoryId,
+    subjectId: body.subjectId,
     title: body.title,
     description: body.description,
     timeLimit: body.timeLimit,
@@ -272,31 +272,31 @@ app.post('/', async (c) => {
     updatedAt: timestamp,
   }
 
-  await db.insert(questionSets).values(questionSet)
+  await db.insert(workbooks).values(workbook)
 
   if (body.tagIds?.length) {
-    await db.insert(questionSetTags).values(
+    await db.insert(workbookTags).values(
       body.tagIds.map((tagId) => ({
-        questionSetId: setId,
+        workbookId,
         tagId,
       })),
     )
   }
 
   if (body.questions?.length) {
-    await bulkInsertQuestions(db, setId, body.questions, timestamp)
+    await bulkInsertQuestions(db, workbookId, body.questions, timestamp)
   }
 
-  return c.json({ success: true, data: questionSet }, 201)
+  return c.json({ success: true, data: workbook }, 201)
 })
 
 app.put('/:id', async (c) => {
   const db = c.get('db')
   const userId = c.get('userId')
   const id = c.req.param('id')
-  const body = updateQuestionSetSchema.parse(await c.req.json())
+  const body = updateWorkbookSchema.parse(await c.req.json())
 
-  const existing = await getQuestionSetForUser(db, id, userId)
+  const existing = await getWorkbookForUser(db, id, userId)
 
   const { tagIds, ...updateData } = body
   if (tagIds?.length) {
@@ -304,18 +304,18 @@ app.put('/:id', async (c) => {
   }
 
   await db
-    .update(questionSets)
+    .update(workbooks)
     .set({ ...updateData, updatedAt: now() })
-    .where(and(eq(questionSets.id, id), eq(questionSets.userId, userId)))
+    .where(and(eq(workbooks.id, id), eq(workbooks.userId, userId)))
 
   if (tagIds !== undefined) {
     await db
-      .delete(questionSetTags)
-      .where(eq(questionSetTags.questionSetId, id))
+      .delete(workbookTags)
+      .where(eq(workbookTags.workbookId, id))
     if (tagIds.length > 0) {
-      await db.insert(questionSetTags).values(
+      await db.insert(workbookTags).values(
         tagIds.map((tagId) => ({
-          questionSetId: id,
+          workbookId: id,
           tagId,
         })),
       )
@@ -330,11 +330,11 @@ app.delete('/:id', async (c) => {
   const userId = c.get('userId')
   const id = c.req.param('id')
 
-  await getQuestionSetForUser(db, id, userId)
+  await getWorkbookForUser(db, id, userId)
 
   await db
-    .delete(questionSets)
-    .where(and(eq(questionSets.id, id), eq(questionSets.userId, userId)))
+    .delete(workbooks)
+    .where(and(eq(workbooks.id, id), eq(workbooks.userId, userId)))
   return c.json({ success: true })
 })
 
@@ -343,21 +343,21 @@ app.get('/:id/export', async (c) => {
   const userId = c.get('userId')
   const id = c.req.param('id')
 
-  const questionSet = await getQuestionSetForUser(db, id, userId)
+  const workbook = await getWorkbookForUser(db, id, userId)
 
-  const [questionsWithDetails, setTags] = await Promise.all([
+  const [questionsWithDetails, wbTags] = await Promise.all([
     fetchQuestionsWithDetails(db, id),
     db
       .select()
-      .from(questionSetTags)
-      .where(eq(questionSetTags.questionSetId, id)),
+      .from(workbookTags)
+      .where(eq(workbookTags.workbookId, id)),
   ])
 
   return c.json({
     success: true,
     data: {
-      ...questionSet,
-      tagIds: setTags.map((t) => t.tagId),
+      ...workbook,
+      tagIds: wbTags.map((t) => t.tagId),
       questions: questionsWithDetails,
     },
   })
@@ -366,19 +366,19 @@ app.get('/:id/export', async (c) => {
 app.post('/import', async (c) => {
   const db = c.get('db')
   const userId = c.get('userId')
-  const body = createQuestionSetSchema.parse(await c.req.json())
+  const body = createWorkbookSchema.parse(await c.req.json())
   const timestamp = now()
 
-  await getCategoryForUser(db, body.categoryId, userId)
+  await getSubjectForUser(db, body.subjectId, userId)
   if (body.tagIds?.length) {
     await verifyTagsOwnership(db, body.tagIds, userId)
   }
 
-  const setId = generateUlid()
-  await db.insert(questionSets).values({
-    id: setId,
+  const workbookId = generateUlid()
+  await db.insert(workbooks).values({
+    id: workbookId,
     userId,
-    categoryId: body.categoryId,
+    subjectId: body.subjectId,
     title: body.title,
     description: body.description,
     timeLimit: body.timeLimit,
@@ -388,19 +388,19 @@ app.post('/import', async (c) => {
   })
 
   if (body.tagIds?.length) {
-    await db.insert(questionSetTags).values(
+    await db.insert(workbookTags).values(
       body.tagIds.map((tagId) => ({
-        questionSetId: setId,
+        workbookId,
         tagId,
       })),
     )
   }
 
   if (body.questions?.length) {
-    await bulkInsertQuestions(db, setId, body.questions, timestamp)
+    await bulkInsertQuestions(db, workbookId, body.questions, timestamp)
   }
 
-  return c.json({ success: true, data: { id: setId } }, 201)
+  return c.json({ success: true, data: { id: workbookId } }, 201)
 })
 
 export default app

@@ -19,9 +19,9 @@ import {
 } from '@/components/shared/question-editor'
 import type {
   ApiResponse,
-  QuestionSet,
+  Workbook,
   Question,
-  Category,
+  Subject,
   Tag,
 } from '@/types'
 import type { ConfidenceLevel } from '@/lib/confidence-config'
@@ -29,7 +29,7 @@ import type { ConfidenceLevel } from '@/lib/confidence-config'
 interface SetFormData {
   title: string
   description: string
-  categoryId: string
+  subjectId: string
   timeLimit: string
   isPublished: boolean
   tagIds: string[]
@@ -241,7 +241,7 @@ function uiReducer(state: UiState, action: UiAction): UiState {
   }
 }
 
-export default function AdminQuestionSetEditPage() {
+export default function AdminWorkbookEditPage() {
   const { id } = useParams<{ id: string }>()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -252,7 +252,7 @@ export default function AdminQuestionSetEditPage() {
   const [setForm, setSetForm] = useState<SetFormData>({
     title: '',
     description: '',
-    categoryId: isNew ? (searchParams.get('categoryId') ?? '') : '',
+    subjectId: isNew ? (searchParams.get('subjectId') ?? '') : '',
     timeLimit: '',
     isPublished: false,
     tagIds: [],
@@ -280,15 +280,15 @@ export default function AdminQuestionSetEditPage() {
   }
 
   const setQuery = useQuery({
-    queryKey: queryKeys.questionSets.detail(id!),
+    queryKey: queryKeys.workbooks.detail(id!),
     queryFn: () =>
-      api.get<ApiResponse<QuestionSet>>(`/question-sets/${id}`),
+      api.get<ApiResponse<Workbook>>(`/workbooks/${id}`),
     enabled: !isNew,
   })
 
-  const categoriesQuery = useQuery({
-    queryKey: queryKeys.categories.all,
-    queryFn: () => api.get<ApiResponse<Category[]>>('/categories'),
+  const subjectsQuery = useQuery({
+    queryKey: queryKeys.subjects.all,
+    queryFn: () => api.get<ApiResponse<Subject[]>>('/subjects'),
   })
 
   const tagsQuery = useQuery({
@@ -323,7 +323,7 @@ export default function AdminQuestionSetEditPage() {
     setSetForm({
       title: data.title,
       description: data.description ?? '',
-      categoryId: data.categoryId,
+      subjectId: data.subjectId,
       timeLimit:
         data.timeLimit !== null ? String(Math.floor(data.timeLimit / 60)) : '',
       isPublished: data.isPublished,
@@ -339,12 +339,12 @@ export default function AdminQuestionSetEditPage() {
 
   const createSetMutation = useMutation({
     mutationFn: (payload: Record<string, unknown>) =>
-      api.post<ApiResponse<QuestionSet>>('/question-sets', payload),
+      api.post<ApiResponse<Workbook>>('/workbooks', payload),
     onSuccess: (response) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.questionSets.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.workbooks.all })
       const newId = response.data?.id
       if (newId) {
-        navigate(`/admin/question-sets/${newId}`, { replace: true })
+        navigate(`/admin/workbooks/${newId}`, { replace: true })
       }
     },
     onError: (error: Error) => {
@@ -354,13 +354,13 @@ export default function AdminQuestionSetEditPage() {
 
   const updateSetMutation = useMutation({
     mutationFn: (payload: Record<string, unknown>) =>
-      api.put<ApiResponse<QuestionSet>>(`/question-sets/${id}`, payload),
+      api.put<ApiResponse<Workbook>>(`/workbooks/${id}`, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: queryKeys.questionSets.detail(id!),
+        queryKey: queryKeys.workbooks.detail(id!),
       })
-      queryClient.invalidateQueries({ queryKey: queryKeys.questionSets.all })
-      showToast({ type: 'success', message: '問題セットを保存しました。' })
+      queryClient.invalidateQueries({ queryKey: queryKeys.workbooks.all })
+      showToast({ type: 'success', message: '問題集を保存しました。' })
     },
     onError: (error: Error) => {
       showToast({ type: 'error', message: error.message })
@@ -378,18 +378,18 @@ export default function AdminQuestionSetEditPage() {
     }) => {
       if (questionId) {
         return api.put<ApiResponse<Question>>(
-          `/question-sets/${id}/questions/${questionId}`,
+          `/workbooks/${id}/questions/${questionId}`,
           payload,
         )
       }
       return api.post<ApiResponse<Question>>(
-        `/question-sets/${id}/questions`,
+        `/workbooks/${id}/questions`,
         payload,
       )
     },
     onSuccess: (response, variables) => {
       queryClient.invalidateQueries({
-        queryKey: queryKeys.questionSets.detail(id!),
+        queryKey: queryKeys.workbooks.detail(id!),
       })
       dispatch({ type: 'CLEAR_DIRTY', index: variables.questionIndex })
       dispatch({ type: 'SET_SAVE_STATUS', index: variables.questionIndex, status: 'saved' })
@@ -415,11 +415,11 @@ export default function AdminQuestionSetEditPage() {
   const deleteQuestionMutation = useMutation({
     mutationFn: (questionId: string) =>
       api.delete<ApiResponse<null>>(
-        `/question-sets/${id}/questions/${questionId}`,
+        `/workbooks/${id}/questions/${questionId}`,
       ),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: queryKeys.questionSets.detail(id!),
+        queryKey: queryKeys.workbooks.detail(id!),
       })
     },
     onError: (error: Error) => {
@@ -430,12 +430,12 @@ export default function AdminQuestionSetEditPage() {
   const reorderMutation = useMutation({
     mutationFn: (questionIds: string[]) =>
       api.patch<ApiResponse<null>>(
-        `/question-sets/${id}/questions/reorder`,
+        `/workbooks/${id}/questions/reorder`,
         { questionIds },
       ),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: queryKeys.questionSets.detail(id!),
+        queryKey: queryKeys.workbooks.detail(id!),
       })
     },
     onError: (error: Error) => {
@@ -587,7 +587,7 @@ export default function AdminQuestionSetEditPage() {
     const payload = {
       title: setForm.title,
       description: setForm.description || null,
-      categoryId: setForm.categoryId,
+      subjectId: setForm.subjectId,
       timeLimit: setForm.timeLimit ? Number(setForm.timeLimit) * 60 : null,
       isPublished: setForm.isPublished,
       tagIds: setForm.tagIds,
@@ -696,7 +696,7 @@ export default function AdminQuestionSetEditPage() {
     return <ErrorMessage message={setQuery.error.message} />
   }
 
-  const categories = categoriesQuery.data?.data ?? []
+  const subjects = subjectsQuery.data?.data ?? []
   const tags = tagsQuery.data?.data ?? []
   const isSaving =
     createSetMutation.isPending ||
@@ -706,15 +706,15 @@ export default function AdminQuestionSetEditPage() {
     <div className="space-y-6">
       <div className="flex items-center gap-4">
         <Link
-          to="/admin/question-sets"
+          to="/admin/workbooks"
           className="text-sm text-primary hover:underline"
         >
-          &larr; 問題セット一覧に戻る
+          &larr; 問題集一覧に戻る
         </Link>
       </div>
 
       <h1 className="text-2xl font-bold tracking-tight">
-        {isNew ? '新規問題セット' : '問題セットを編集'}
+        {isNew ? '新規問題集' : '問題集を編集'}
       </h1>
 
       <Collapsible
@@ -751,23 +751,23 @@ export default function AdminQuestionSetEditPage() {
             </div>
             <div>
               <label
-                htmlFor="set-category"
+                htmlFor="set-subject"
                 className="mb-1 block text-sm font-medium"
               >
-                カテゴリ
+                科目
               </label>
               <select
-                id="set-category"
-                value={setForm.categoryId}
+                id="set-subject"
+                value={setForm.subjectId}
                 onChange={(e) =>
-                  handleSetFieldChange('categoryId', e.target.value)
+                  handleSetFieldChange('subjectId', e.target.value)
                 }
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <option value="">カテゴリを選択</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.name}
+                <option value="">科目を選択</option>
+                {subjects.map((subj) => (
+                  <option key={subj.id} value={subj.id}>
+                    {subj.name}
                   </option>
                 ))}
               </select>
@@ -848,13 +848,13 @@ export default function AdminQuestionSetEditPage() {
           <button
             type="button"
             onClick={handleSaveSet}
-            disabled={isSaving || !setForm.title || !setForm.categoryId}
+            disabled={isSaving || !setForm.title || !setForm.subjectId}
             className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
           >
             {isSaving
               ? '保存中...'
               : isNew
-                ? '問題セットを作成'
+                ? '問題集を作成'
                 : 'セット詳細を保存'}
           </button>
         </div>

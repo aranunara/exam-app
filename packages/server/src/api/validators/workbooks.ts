@@ -26,8 +26,8 @@ const questionSchema = z.object({
     ),
 })
 
-export const createQuestionSetSchema = z.object({
-  categoryId: z.string().min(1),
+export const createWorkbookSchema = z.object({
+  subjectId: z.string().min(1),
   title: z.string().min(1).max(500),
   description: z.string().max(2000).nullable().optional(),
   timeLimit: z.number().int().min(0).nullable().optional(),
@@ -36,7 +36,7 @@ export const createQuestionSetSchema = z.object({
   questions: z.array(questionSchema).optional(),
 })
 
-export const updateQuestionSetSchema = z.object({
+export const updateWorkbookSchema = z.object({
   title: z.string().min(1).max(500).optional(),
   description: z.string().max(2000).nullable().optional(),
   timeLimit: z.number().int().min(0).nullable().optional(),

@@ -9,7 +9,7 @@ import {
   ResponsiveTable,
   type ColumnDef,
 } from '@/components/shared/responsive-table'
-import type { ApiResponse, QuestionSet, Category } from '@/types'
+import type { ApiResponse, Workbook, Subject } from '@/types'
 
 function DeleteConfirmation({
   title,
@@ -59,27 +59,27 @@ function LoadingSkeleton() {
   )
 }
 
-export default function AdminQuestionSetsPage() {
+export default function AdminWorkbooksPage() {
   const queryClient = useQueryClient()
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [mutationError, setMutationError] = useState<string | null>(null)
 
-  const setsQuery = useQuery({
-    queryKey: queryKeys.questionSets.all,
+  const workbooksQuery = useQuery({
+    queryKey: queryKeys.workbooks.all,
     queryFn: () =>
-      api.get<ApiResponse<QuestionSet[]>>('/question-sets'),
+      api.get<ApiResponse<Workbook[]>>('/workbooks'),
   })
 
-  const categoriesQuery = useQuery({
-    queryKey: queryKeys.categories.all,
-    queryFn: () => api.get<ApiResponse<Category[]>>('/categories'),
+  const subjectsQuery = useQuery({
+    queryKey: queryKeys.subjects.all,
+    queryFn: () => api.get<ApiResponse<Subject[]>>('/subjects'),
   })
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) =>
-      api.delete<ApiResponse<null>>(`/question-sets/${id}`),
+      api.delete<ApiResponse<null>>(`/workbooks/${id}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.questionSets.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.workbooks.all })
       setDeletingId(null)
       setMutationError(null)
     },
@@ -88,32 +88,32 @@ export default function AdminQuestionSetsPage() {
     },
   })
 
-  if (setsQuery.isLoading || categoriesQuery.isLoading) {
+  if (workbooksQuery.isLoading || subjectsQuery.isLoading) {
     return <LoadingSkeleton />
   }
 
-  if (setsQuery.error) {
-    return <ErrorMessage message={setsQuery.error.message} />
+  if (workbooksQuery.error) {
+    return <ErrorMessage message={workbooksQuery.error.message} />
   }
 
-  const questionSets = setsQuery.data?.data ?? []
-  const categories = categoriesQuery.data?.data ?? []
+  const workbooks = workbooksQuery.data?.data ?? []
+  const subjects = subjectsQuery.data?.data ?? []
 
-  const categoryMap = new Map(
-    categories.map((c) => [c.id, c.name]),
+  const subjectMap = new Map(
+    subjects.map((s) => [s.id, s.name]),
   )
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">問題セット</h1>
+          <h1 className="text-2xl font-bold tracking-tight">問題集</h1>
           <p className="mt-1 text-muted-foreground">
-            試験用の問題セットを管理します。
+            試験用の問題集を管理します。
           </p>
         </div>
         <Link
-          to="/admin/question-sets/new"
+          to="/admin/workbooks/new"
           className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
         >
           新規作成
@@ -123,57 +123,57 @@ export default function AdminQuestionSetsPage() {
       {mutationError && <ErrorMessage message={mutationError} />}
 
       <ResponsiveTable
-        data={questionSets}
+        data={workbooks}
         columns={[
           {
             header: 'タイトル',
             key: 'title',
-            cell: (set: QuestionSet) => (
+            cell: (wb: Workbook) => (
               <Link
-                to={`/admin/question-sets/${set.id}`}
+                to={`/admin/workbooks/${wb.id}`}
                 className="font-medium text-primary hover:underline"
               >
-                {set.title}
+                {wb.title}
               </Link>
             ),
             primary: true,
           },
           {
-            header: 'カテゴリ',
-            key: 'category',
-            cell: (set: QuestionSet) => (
+            header: '科目',
+            key: 'subject',
+            cell: (wb: Workbook) => (
               <span className="text-muted-foreground">
-                {categoryMap.get(set.categoryId) ?? '不明'}
+                {subjectMap.get(wb.subjectId) ?? '不明'}
               </span>
             ),
           },
           {
             header: '問題数',
             key: 'questionCount',
-            cell: (set: QuestionSet) =>
-              set.questionCount ?? set.questions?.length ?? 0,
+            cell: (wb: Workbook) =>
+              wb.questionCount ?? wb.questions?.length ?? 0,
           },
           {
             header: 'ステータス',
             key: 'status',
-            cell: (set: QuestionSet) => (
+            cell: (wb: Workbook) => (
               <span
                 className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                  set.isPublished
+                  wb.isPublished
                     ? 'bg-success-muted text-success-foreground'
                     : 'bg-warning-muted text-flag-foreground'
                 }`}
               >
-                {set.isPublished ? '公開' : '下書き'}
+                {wb.isPublished ? '公開' : '下書き'}
               </span>
             ),
           },
           {
             header: '作成日',
             key: 'createdAt',
-            cell: (set: QuestionSet) => (
+            cell: (wb: Workbook) => (
               <span className="text-muted-foreground">
-                {formatDateShort(set.createdAt)}
+                {formatDateShort(wb.createdAt)}
               </span>
             ),
           },
@@ -182,11 +182,11 @@ export default function AdminQuestionSetsPage() {
             key: 'actions',
             align: 'right' as const,
             hideOnMobile: true,
-            cell: (set: QuestionSet) =>
-              deletingId === set.id ? (
+            cell: (wb: Workbook) =>
+              deletingId === wb.id ? (
                 <DeleteConfirmation
-                  title={set.title}
-                  onConfirm={() => deleteMutation.mutate(set.id)}
+                  title={wb.title}
+                  onConfirm={() => deleteMutation.mutate(wb.id)}
                   onCancel={() => {
                     setDeletingId(null)
                     setMutationError(null)
@@ -196,7 +196,7 @@ export default function AdminQuestionSetsPage() {
               ) : (
                 <div className="flex justify-end gap-2">
                   <Link
-                    to={`/admin/question-sets/${set.id}`}
+                    to={`/admin/workbooks/${wb.id}`}
                     className="rounded-md border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted"
                   >
                     編集
@@ -204,7 +204,7 @@ export default function AdminQuestionSetsPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      setDeletingId(set.id)
+                      setDeletingId(wb.id)
                       setMutationError(null)
                     }}
                     className="rounded-md border border-destructive/50 px-3 py-1.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
@@ -214,13 +214,13 @@ export default function AdminQuestionSetsPage() {
                 </div>
               ),
           },
-        ] satisfies ColumnDef<QuestionSet>[]}
-        keyExtractor={(set) => set.id}
-        cardFooter={(set) =>
-          deletingId === set.id ? (
+        ] satisfies ColumnDef<Workbook>[]}
+        keyExtractor={(wb) => wb.id}
+        cardFooter={(wb) =>
+          deletingId === wb.id ? (
             <DeleteConfirmation
-              title={set.title}
-              onConfirm={() => deleteMutation.mutate(set.id)}
+              title={wb.title}
+              onConfirm={() => deleteMutation.mutate(wb.id)}
               onCancel={() => {
                 setDeletingId(null)
                 setMutationError(null)
@@ -230,7 +230,7 @@ export default function AdminQuestionSetsPage() {
           ) : (
             <div className="flex gap-2">
               <Link
-                to={`/admin/question-sets/${set.id}`}
+                to={`/admin/workbooks/${wb.id}`}
                 className="rounded-md border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted"
               >
                 編集
@@ -238,7 +238,7 @@ export default function AdminQuestionSetsPage() {
               <button
                 type="button"
                 onClick={() => {
-                  setDeletingId(set.id)
+                  setDeletingId(wb.id)
                   setMutationError(null)
                 }}
                 className="rounded-md border border-destructive/50 px-3 py-1.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
@@ -248,7 +248,7 @@ export default function AdminQuestionSetsPage() {
             </div>
           )
         }
-        emptyMessage="問題セットがまだありません。最初の問題セットを作成してください。"
+        emptyMessage="問題集がまだありません。最初の問題集を作成してください。"
       />
     </div>
   )

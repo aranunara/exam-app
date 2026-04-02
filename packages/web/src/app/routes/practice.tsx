@@ -31,14 +31,14 @@ function PracticeTimer() {
 
 type CreateSessionResponse = ApiResponse<{
   id: string
-  questionSetId: string
+  workbookId: string
   mode: 'practice' | 'exam'
   totalQuestions: number
   timeLimit: number | null
 }>
 
 export default function PracticePage() {
-  const { questionSetId } = useParams<{ questionSetId: string }>()
+  const { workbookId } = useParams<{ workbookId: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const sessionId = useSessionId()
@@ -73,12 +73,12 @@ export default function PracticePage() {
   const previewInfo = location.state as { title?: string; questionCount?: number; timeLimit?: number | null } | null
 
   const previewQuery = useQuery({
-    queryKey: queryKeys.sessions.previewFilter(questionSetId ?? ''),
+    queryKey: queryKeys.sessions.previewFilter(workbookId ?? ''),
     queryFn: () =>
       api.post<ApiResponse<FilterPreview>>('/sessions/preview-filter', {
-        questionSetId,
+        workbookId,
       }),
-    enabled: !!questionSetId && !isConfirmed,
+    enabled: !!workbookId && !isConfirmed,
     staleTime: 0,
   })
 
@@ -105,7 +105,7 @@ export default function PracticePage() {
   const createSessionMutation = useMutation({
     mutationFn: () =>
       api.post<CreateSessionResponse>('/sessions', {
-        questionSetId,
+        workbookId,
         mode: 'practice',
         ...(filterConfidenceLevels.length > 0
           ? { filters: { confidenceLevels: filterConfidenceLevels } }
@@ -136,7 +136,7 @@ export default function PracticePage() {
       reset()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [questionSetId])
+  }, [workbookId])
 
   useEffect(() => {
     if (isConfirmed) {
@@ -286,7 +286,7 @@ export default function PracticePage() {
       })
       complete()
       await queryClient.invalidateQueries({ queryKey: ['stats'] })
-      navigate(`/exam/${questionSetId}/result`, {
+      navigate(`/exam/${workbookId}/result`, {
         state: { sessionId },
       })
     } catch (error) {
@@ -294,7 +294,7 @@ export default function PracticePage() {
         error instanceof Error ? error.message : 'Failed to complete session',
       )
     }
-  }, [sessionId, questionSetId, navigate, complete, queryClient])
+  }, [sessionId, workbookId, navigate, complete, queryClient])
 
   const handleAbort = useCallback(async () => {
     if (sessionId) {
