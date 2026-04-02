@@ -11,7 +11,7 @@ export function LoadingSpinner({
     <div role="status" aria-label={label ?? '読み込み中'} className="flex items-center gap-3">
       <div
         className={cn(
-          'h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent',
+          'h-8 w-8 motion-safe:animate-spin rounded-full border-4 border-primary border-t-transparent',
           className,
         )}
       />

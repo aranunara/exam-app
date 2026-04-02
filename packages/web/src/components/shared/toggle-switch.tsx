@@ -30,7 +30,7 @@ export function ToggleSwitch({
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn(
-        'relative inline-flex shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
+        'relative inline-flex shrink-0 cursor-pointer items-center rounded-full motion-safe:transition-colors motion-safe:duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
         trackSize,
         checked
           ? 'bg-primary'
@@ -39,7 +39,7 @@ export function ToggleSwitch({
     >
       <span
         className={cn(
-          'pointer-events-none inline-block rounded-full bg-white shadow-sm ring-0 transition-transform duration-200',
+          'pointer-events-none inline-block rounded-full bg-white shadow-sm ring-0 motion-safe:transition-transform motion-safe:duration-200',
           thumbSize,
           thumbTranslate,
         )}

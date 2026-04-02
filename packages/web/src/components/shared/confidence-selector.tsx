@@ -54,7 +54,7 @@ export function ConfidenceSelector({
             type="button"
             onClick={() => handleClick(config.level as ConfidenceLevel)}
             disabled={mutation.isPending}
-            className={`rounded-md border px-3 py-2 text-xs font-medium transition-colors disabled:opacity-50 sm:px-2 sm:py-1 ${
+            className={`rounded-md border px-3 py-2 text-xs font-medium transition-colors active:scale-95 motion-safe:transition-transform motion-safe:duration-150 disabled:opacity-50 sm:px-2 sm:py-1 ${
               isActive
                 ? `${config.bgClass} ${config.textClass} ${config.borderClass}`
                 : 'border-border bg-card text-muted-foreground hover:bg-muted'

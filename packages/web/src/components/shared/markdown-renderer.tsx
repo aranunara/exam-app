@@ -74,7 +74,7 @@ const markdownComponents: Components = {
     }
 
     return (
-      <pre className="overflow-x-auto rounded-lg bg-muted p-4" {...props}>
+      <pre className="overflow-x-auto rounded-lg bg-muted p-4 text-foreground" {...props}>
         {children}
       </pre>
     )
@@ -83,13 +83,13 @@ const markdownComponents: Components = {
     const isBlock = /language-\w+/.test(className || '')
     if (isBlock) {
       return (
-        <code className={className} {...props}>
+        <code className={`${className || ''} text-foreground`} {...props}>
           {children}
         </code>
       )
     }
     return (
-      <code className="rounded bg-muted px-1.5 py-0.5 text-sm" {...props}>
+      <code className="rounded bg-muted px-1.5 py-0.5 text-sm text-foreground" {...props}>
         {children}
       </code>
     )
