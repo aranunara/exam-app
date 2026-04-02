@@ -19,8 +19,12 @@ const AdminQuestionSets = lazy(() => import('@/app/routes/admin-question-sets'))
 const AdminQuestionSetEdit = lazy(
   () => import('@/app/routes/admin-question-set-edit'),
 )
+const AdminTags = lazy(() => import('@/app/routes/admin-tags'))
 const AdminImportExport = lazy(
   () => import('@/app/routes/admin-import-export'),
+)
+const QuestionSetHistory = lazy(
+  () => import('@/app/routes/question-set-history'),
 )
 
 function SuspenseWrapper({ children }: { children: React.ReactNode }) {
@@ -114,6 +118,14 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: 'question-sets/:questionSetId/history',
+        element: (
+          <SuspenseWrapper>
+            <QuestionSetHistory />
+          </SuspenseWrapper>
+        ),
+      },
+      {
         path: 'stats/history/:attemptId',
         element: (
           <SuspenseWrapper>
@@ -142,6 +154,14 @@ export const router = createBrowserRouter([
         element: (
           <SuspenseWrapper>
             <AdminQuestionSetEdit />
+          </SuspenseWrapper>
+        ),
+      },
+      {
+        path: 'admin/tags',
+        element: (
+          <SuspenseWrapper>
+            <AdminTags />
           </SuspenseWrapper>
         ),
       },

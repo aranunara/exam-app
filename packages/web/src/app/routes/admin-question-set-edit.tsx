@@ -1,5 +1,5 @@
-import { useState, useCallback, useRef, useReducer } from 'react'
-import { useParams, useNavigate, Link } from 'react-router'
+import { useState, useCallback, useRef, useReducer, useEffect, useMemo } from 'react'
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api-client'
 import { queryKeys } from '@/lib/query-keys'
@@ -10,6 +10,8 @@ import {
   QuestionNavigator,
   type QuestionState,
 } from '@/components/shared/question-navigator'
+import { useModal } from '@/hooks/use-modal'
+import { WritingTipsModal } from '@/components/shared/writing-tips-modal'
 import {
   QuestionEditor,
   createEmptyQuestion,
@@ -22,6 +24,7 @@ import type {
   Category,
   Tag,
 } from '@/types'
+import type { ConfidenceLevel } from '@/lib/confidence-config'
 
 interface SetFormData {
   title: string
@@ -31,6 +34,8 @@ interface SetFormData {
   isPublished: boolean
   tagIds: string[]
 }
+
+type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
 function questionToForm(question: Question): QuestionFormData {
   return {
@@ -74,7 +79,7 @@ function Toast({ toast, onClose }: { toast: ToastData; onClose: () => void }) {
       role="alert"
       className={`animate-in slide-in-from-bottom-2 flex items-start gap-3 rounded-lg border p-4 shadow-lg ${
         isSuccess
-          ? 'border-green-200 bg-green-50 text-green-700 dark:border-green-900/50 dark:bg-green-950/90 dark:text-green-400'
+          ? 'border-success/30 bg-success-muted text-success-foreground'
           : 'border-destructive/50 bg-destructive/10 text-destructive'
       }`}
     >
@@ -110,6 +115,7 @@ interface UiState {
   dirtyQuestions: Set<number>
   activeQuestionIndex: number | null
   toast: ToastData | null
+  saveStatuses: Map<number, SaveStatus>
 }
 
 type UiAction =
@@ -125,6 +131,7 @@ type UiAction =
   | { type: 'CLEAR_TOAST' }
   | { type: 'REMOVE_QUESTION_ADJUST'; removedIndex: number }
   | { type: 'SWAP_QUESTION_INDICES'; fromIndex: number; toIndex: number }
+  | { type: 'SET_SAVE_STATUS'; index: number; status: SaveStatus }
 
 function uiReducer(state: UiState, action: UiAction): UiState {
   switch (action.type) {
@@ -172,6 +179,11 @@ function uiReducer(state: UiState, action: UiAction): UiState {
         if (idx < removedIndex) nextDirty.add(idx)
         else if (idx > removedIndex) nextDirty.add(idx - 1)
       }
+      const nextStatuses = new Map<number, SaveStatus>()
+      for (const [idx, status] of state.saveStatuses) {
+        if (idx < removedIndex) nextStatuses.set(idx, status)
+        else if (idx > removedIndex) nextStatuses.set(idx - 1, status)
+      }
       let nextActive = state.activeQuestionIndex
       if (nextActive === removedIndex) {
         nextActive = null
@@ -182,6 +194,7 @@ function uiReducer(state: UiState, action: UiAction): UiState {
         ...state,
         expandedQuestions: nextExpanded,
         dirtyQuestions: nextDirty,
+        saveStatuses: nextStatuses,
         activeQuestionIndex: nextActive,
       }
     }
@@ -199,6 +212,12 @@ function uiReducer(state: UiState, action: UiAction): UiState {
         else if (idx === toIndex) nextDirty.add(fromIndex)
         else nextDirty.add(idx)
       }
+      const nextStatuses = new Map<number, SaveStatus>()
+      for (const [idx, status] of state.saveStatuses) {
+        if (idx === fromIndex) nextStatuses.set(toIndex, status)
+        else if (idx === toIndex) nextStatuses.set(fromIndex, status)
+        else nextStatuses.set(idx, status)
+      }
       let nextActive = state.activeQuestionIndex
       if (nextActive === fromIndex) nextActive = toIndex
       else if (nextActive === toIndex) nextActive = fromIndex
@@ -206,22 +225,34 @@ function uiReducer(state: UiState, action: UiAction): UiState {
         ...state,
         expandedQuestions: nextExpanded,
         dirtyQuestions: nextDirty,
+        saveStatuses: nextStatuses,
         activeQuestionIndex: nextActive,
       }
+    }
+    case 'SET_SAVE_STATUS': {
+      const next = new Map(state.saveStatuses)
+      if (action.status === 'idle') {
+        next.delete(action.index)
+      } else {
+        next.set(action.index, action.status)
+      }
+      return { ...state, saveStatuses: next }
     }
   }
 }
 
 export default function AdminQuestionSetEditPage() {
   const { id } = useParams<{ id: string }>()
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const isNew = id === 'new'
+  const tipsModal = useModal()
 
   const [setForm, setSetForm] = useState<SetFormData>({
     title: '',
     description: '',
-    categoryId: '',
+    categoryId: isNew ? (searchParams.get('categoryId') ?? '') : '',
     timeLimit: '',
     isPublished: false,
     tagIds: [],
@@ -235,9 +266,13 @@ export default function AdminQuestionSetEditPage() {
     dirtyQuestions: new Set<number>(),
     activeQuestionIndex: null,
     toast: null,
+    saveStatuses: new Map<number, SaveStatus>(),
   })
 
   const questionRefs = useRef<Map<number, HTMLDivElement>>(new Map())
+  const questionsRef = useRef(questions)
+  questionsRef.current = questions
+  const autoSaveTimersRef = useRef(new Map<number, ReturnType<typeof setTimeout>>())
 
   function showToast(data: ToastData) {
     dispatch({ type: 'SHOW_TOAST', toast: data })
@@ -260,6 +295,28 @@ export default function AdminQuestionSetEditPage() {
     queryKey: queryKeys.tags.all,
     queryFn: () => api.get<ApiResponse<Tag[]>>('/tags'),
   })
+
+  const questionIds = useMemo(
+    () => questions.filter((q) => q.id).map((q) => q.id!),
+    [questions],
+  )
+
+  const confidenceQuery = useQuery({
+    queryKey: queryKeys.confidence.batch(questionIds),
+    queryFn: () =>
+      api.post<ApiResponse<Record<string, number>>>('/confidence/batch', {
+        questionIds,
+      }),
+    enabled: !isNew && questionIds.length > 0,
+  })
+
+  const [confidenceMap, setConfidenceMap] = useState<Record<string, number>>({})
+
+  useEffect(() => {
+    if (confidenceQuery.data?.data) {
+      setConfidenceMap(confidenceQuery.data.data)
+    }
+  }, [confidenceQuery.data])
 
   if (setQuery.data?.data && !initialized) {
     const data = setQuery.data.data
@@ -335,6 +392,10 @@ export default function AdminQuestionSetEditPage() {
         queryKey: queryKeys.questionSets.detail(id!),
       })
       dispatch({ type: 'CLEAR_DIRTY', index: variables.questionIndex })
+      dispatch({ type: 'SET_SAVE_STATUS', index: variables.questionIndex, status: 'saved' })
+      setTimeout(() => {
+        dispatch({ type: 'SET_SAVE_STATUS', index: variables.questionIndex, status: 'idle' })
+      }, 3000)
       if (response.data?.id) {
         setQuestions((prev) =>
           prev.map((q, i) =>
@@ -344,12 +405,9 @@ export default function AdminQuestionSetEditPage() {
           ),
         )
       }
-      showToast({
-        type: 'success',
-        message: `問題 ${variables.questionIndex + 1} を保存しました。`,
-      })
     },
-    onError: (error: Error) => {
+    onError: (error: Error, variables) => {
+      dispatch({ type: 'SET_SAVE_STATUS', index: variables.questionIndex, status: 'error' })
       showToast({ type: 'error', message: error.message })
     },
   })
@@ -385,6 +443,65 @@ export default function AdminQuestionSetEditPage() {
     },
   })
 
+  const AUTO_SAVE_DELAY = 1500
+
+  function isQuestionValid(question: QuestionFormData): boolean {
+    if (!question.body.trim()) return false
+    if (question.choices.some((c) => !c.body.trim())) return false
+    if (!question.choices.some((c) => c.isCorrect)) return false
+    if (question.choices.every((c) => c.isCorrect)) return false
+    return true
+  }
+
+  function clearAutoSaveTimer(index: number) {
+    const timer = autoSaveTimersRef.current.get(index)
+    if (timer) {
+      clearTimeout(timer)
+      autoSaveTimersRef.current.delete(index)
+    }
+  }
+
+  function scheduleAutoSave(index: number) {
+    clearAutoSaveTimer(index)
+    const timer = setTimeout(() => {
+      autoSaveTimersRef.current.delete(index)
+      const question = questionsRef.current[index]
+      if (!question || !isQuestionValid(question)) return
+
+      dispatch({ type: 'SET_SAVE_STATUS', index, status: 'saving' })
+
+      const payload = {
+        body: question.body,
+        explanation: question.explanation || null,
+        isMultiAnswer: question.isMultiAnswer,
+        sortOrder: question.sortOrder,
+        tagIds: question.tagIds,
+        choices: question.choices.map((c) => ({
+          ...(c.id ? { id: c.id } : {}),
+          body: c.body,
+          isCorrect: c.isCorrect,
+          explanation: c.explanation || null,
+          sortOrder: c.sortOrder,
+        })),
+      }
+
+      saveQuestionMutation.mutate({
+        questionIndex: index,
+        questionId: question.id,
+        payload,
+      })
+    }, AUTO_SAVE_DELAY)
+    autoSaveTimersRef.current.set(index, timer)
+  }
+
+  useEffect(() => {
+    return () => {
+      for (const timer of autoSaveTimersRef.current.values()) {
+        clearTimeout(timer)
+      }
+    }
+  }, [])
+
   const handleSetFieldChange = useCallback(
     (field: keyof SetFormData, value: string | boolean | string[]) => {
       setSetForm((prev) => ({ ...prev, [field]: value }))
@@ -395,9 +512,17 @@ export default function AdminQuestionSetEditPage() {
   function handleQuestionChange(index: number, updated: QuestionFormData) {
     setQuestions((prev) => prev.map((q, i) => (i === index ? updated : q)))
     dispatch({ type: 'MARK_DIRTY', index })
+    if (!isNew) {
+      const currentStatus = ui.saveStatuses.get(index)
+      if (currentStatus === 'error' || currentStatus === 'saved') {
+        dispatch({ type: 'SET_SAVE_STATUS', index, status: 'idle' })
+      }
+      scheduleAutoSave(index)
+    }
   }
 
   function handleRemoveQuestion(index: number) {
+    clearAutoSaveTimer(index)
     const question = questions[index]
     if (question.id) {
       deleteQuestionMutation.mutate(question.id)
@@ -425,6 +550,9 @@ export default function AdminQuestionSetEditPage() {
   function handleMoveQuestion(fromIndex: number, direction: 'up' | 'down') {
     const toIndex = direction === 'up' ? fromIndex - 1 : fromIndex + 1
     if (toIndex < 0 || toIndex >= questions.length) return
+
+    clearAutoSaveTimer(fromIndex)
+    clearAutoSaveTimer(toIndex)
 
     setQuestions((prev) => {
       const newList = [...prev]
@@ -473,6 +601,7 @@ export default function AdminQuestionSetEditPage() {
   }
 
   function handleSaveQuestion(index: number) {
+    clearAutoSaveTimer(index)
     const question = questions[index]
     dispatch({ type: 'CLEAR_TOAST' })
 
@@ -520,6 +649,7 @@ export default function AdminQuestionSetEditPage() {
       })),
     }
 
+    dispatch({ type: 'SET_SAVE_STATUS', index, status: 'saving' })
     saveQuestionMutation.mutate({
       questionIndex: index,
       questionId: question.id,
@@ -570,8 +700,7 @@ export default function AdminQuestionSetEditPage() {
   const tags = tagsQuery.data?.data ?? []
   const isSaving =
     createSetMutation.isPending ||
-    updateSetMutation.isPending ||
-    saveQuestionMutation.isPending
+    updateSetMutation.isPending
 
   return (
     <div className="space-y-6">
@@ -751,6 +880,17 @@ export default function AdminQuestionSetEditPage() {
               </button>
             </div>
           ) : (
+            <>
+            <div className="pb-4 md:hidden">
+              <QuestionNavigator
+                totalQuestions={questions.length}
+                questionStates={getQuestionStates()}
+                activeIndex={ui.activeQuestionIndex}
+                onNavigate={handleNavigateToQuestion}
+                onTipsClick={tipsModal.open}
+              />
+            </div>
+
             <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
               <div className="space-y-4 md:col-span-3">
                 {questions.map((question, idx) => (
@@ -784,9 +924,21 @@ export default function AdminQuestionSetEditPage() {
                           dispatch({ type: 'SET_ACTIVE', index: idx })
                         }
                       }}
-                      isDirty={ui.dirtyQuestions.has(idx) || !question.id}
                       onSave={() => handleSaveQuestion(idx)}
-                      isSaving={saveQuestionMutation.isPending}
+                      saveStatus={ui.saveStatuses.get(idx)}
+                      confidenceLevel={
+                        question.id
+                          ? ((confidenceMap[question.id] ?? 0) as ConfidenceLevel)
+                          : undefined
+                      }
+                      onConfidenceChange={(level) => {
+                        if (question.id) {
+                          setConfidenceMap((prev) => ({
+                            ...prev,
+                            [question.id!]: level,
+                          }))
+                        }
+                      }}
                     />
                   </div>
                 ))}
@@ -800,23 +952,31 @@ export default function AdminQuestionSetEditPage() {
                 </button>
               </div>
 
-              <div className="md:col-span-1">
+              <div className="hidden md:block md:col-span-1">
                 <div className="sticky top-[6.5rem]">
                   <QuestionNavigator
                     totalQuestions={questions.length}
                     questionStates={getQuestionStates()}
                     activeIndex={ui.activeQuestionIndex}
                     onNavigate={handleNavigateToQuestion}
+                    onTipsClick={tipsModal.open}
                   />
                 </div>
               </div>
             </div>
+            </>
           )}
         </section>
       )}
 
+      <WritingTipsModal
+        isOpen={tipsModal.isOpen}
+        onClose={tipsModal.close}
+        modalRef={tipsModal.modalRef}
+      />
+
       {ui.toast && (
-        <div className="fixed bottom-4 right-4 z-50 max-w-sm">
+        <div className="fixed bottom-20 right-4 z-50 max-w-sm md:bottom-4">
           <Toast toast={ui.toast} onClose={() => dispatch({ type: 'CLEAR_TOAST' })} />
         </div>
       )}

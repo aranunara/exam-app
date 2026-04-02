@@ -209,7 +209,7 @@ function ImportSection() {
       )}
 
       {importSuccess && (
-        <div className="mb-4 rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-700 dark:border-green-900/50 dark:bg-green-950/20 dark:text-green-400">
+        <div className="mb-4 rounded-lg border border-success/30 bg-success-muted p-4 text-sm text-success-foreground">
           問題セットのインポートが完了しました。
         </div>
       )}
