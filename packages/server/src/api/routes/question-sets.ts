@@ -7,6 +7,7 @@ import {
   questions,
   questionTags,
   choices,
+  tags,
 } from '../../db/schema'
 import {
   createQuestionSetSchema,
@@ -15,10 +16,28 @@ import {
 import { generateUlid } from '../../lib/ulid'
 import { now } from '../../lib/timestamp'
 import { AppError } from '../middleware/error-handler'
+import {
+  getCategoryForUser,
+  getQuestionSetForUser,
+} from '../helpers/ownership'
 
 const app = new Hono<Env>()
 
 type Database = ReturnType<typeof import('../../db').createDb>
+
+async function verifyTagsOwnership(
+  db: Database,
+  tagIds: string[],
+  userId: string,
+) {
+  const userTags = await db
+    .select({ id: tags.id })
+    .from(tags)
+    .where(and(inArray(tags.id, tagIds), eq(tags.userId, userId)))
+  if (userTags.length !== tagIds.length) {
+    throw new AppError('One or more tags not found', 404)
+  }
+}
 
 async function fetchQuestionsWithDetails(db: Database, questionSetId: string) {
   const qs = await db.query.questions.findMany({
@@ -161,10 +180,11 @@ async function bulkInsertQuestions(
 
 app.get('/', async (c) => {
   const db = c.get('db')
+  const userId = c.get('userId')
   const categoryId = c.req.query('categoryId')
   const published = c.req.query('published')
 
-  const conditions = []
+  const conditions = [eq(questionSets.userId, userId)]
   if (categoryId) {
     conditions.push(eq(questionSets.categoryId, categoryId))
   }
@@ -175,7 +195,7 @@ app.get('/', async (c) => {
   }
 
   const result = await db.query.questionSets.findMany({
-    where: conditions.length > 0 ? and(...conditions) : undefined,
+    where: and(...conditions),
     orderBy: (qs, { desc }) => [desc(qs.createdAt)],
   })
 
@@ -206,14 +226,10 @@ app.get('/', async (c) => {
 
 app.get('/:id', async (c) => {
   const db = c.get('db')
+  const userId = c.get('userId')
   const id = c.req.param('id')
 
-  const questionSet = await db.query.questionSets.findFirst({
-    where: eq(questionSets.id, id),
-  })
-  if (!questionSet) {
-    throw new AppError('Question set not found', 404)
-  }
+  const questionSet = await getQuestionSetForUser(db, id, userId)
 
   const setTags = await db
     .select()
@@ -234,12 +250,19 @@ app.get('/:id', async (c) => {
 
 app.post('/', async (c) => {
   const db = c.get('db')
+  const userId = c.get('userId')
   const body = createQuestionSetSchema.parse(await c.req.json())
   const timestamp = now()
+
+  await getCategoryForUser(db, body.categoryId, userId)
+  if (body.tagIds?.length) {
+    await verifyTagsOwnership(db, body.tagIds, userId)
+  }
 
   const setId = generateUlid()
   const questionSet = {
     id: setId,
+    userId,
     categoryId: body.categoryId,
     title: body.title,
     description: body.description,
@@ -269,21 +292,21 @@ app.post('/', async (c) => {
 
 app.put('/:id', async (c) => {
   const db = c.get('db')
+  const userId = c.get('userId')
   const id = c.req.param('id')
   const body = updateQuestionSetSchema.parse(await c.req.json())
 
-  const existing = await db.query.questionSets.findFirst({
-    where: eq(questionSets.id, id),
-  })
-  if (!existing) {
-    throw new AppError('Question set not found', 404)
-  }
+  const existing = await getQuestionSetForUser(db, id, userId)
 
   const { tagIds, ...updateData } = body
+  if (tagIds?.length) {
+    await verifyTagsOwnership(db, tagIds, userId)
+  }
+
   await db
     .update(questionSets)
     .set({ ...updateData, updatedAt: now() })
-    .where(eq(questionSets.id, id))
+    .where(and(eq(questionSets.id, id), eq(questionSets.userId, userId)))
 
   if (tagIds !== undefined) {
     await db
@@ -304,29 +327,23 @@ app.put('/:id', async (c) => {
 
 app.delete('/:id', async (c) => {
   const db = c.get('db')
+  const userId = c.get('userId')
   const id = c.req.param('id')
 
-  const existing = await db.query.questionSets.findFirst({
-    where: eq(questionSets.id, id),
-  })
-  if (!existing) {
-    throw new AppError('Question set not found', 404)
-  }
+  await getQuestionSetForUser(db, id, userId)
 
-  await db.delete(questionSets).where(eq(questionSets.id, id))
+  await db
+    .delete(questionSets)
+    .where(and(eq(questionSets.id, id), eq(questionSets.userId, userId)))
   return c.json({ success: true })
 })
 
 app.get('/:id/export', async (c) => {
   const db = c.get('db')
+  const userId = c.get('userId')
   const id = c.req.param('id')
 
-  const questionSet = await db.query.questionSets.findFirst({
-    where: eq(questionSets.id, id),
-  })
-  if (!questionSet) {
-    throw new AppError('Question set not found', 404)
-  }
+  const questionSet = await getQuestionSetForUser(db, id, userId)
 
   const [questionsWithDetails, setTags] = await Promise.all([
     fetchQuestionsWithDetails(db, id),
@@ -348,12 +365,19 @@ app.get('/:id/export', async (c) => {
 
 app.post('/import', async (c) => {
   const db = c.get('db')
+  const userId = c.get('userId')
   const body = createQuestionSetSchema.parse(await c.req.json())
   const timestamp = now()
+
+  await getCategoryForUser(db, body.categoryId, userId)
+  if (body.tagIds?.length) {
+    await verifyTagsOwnership(db, body.tagIds, userId)
+  }
 
   const setId = generateUlid()
   await db.insert(questionSets).values({
     id: setId,
+    userId,
     categoryId: body.categoryId,
     title: body.title,
     description: body.description,

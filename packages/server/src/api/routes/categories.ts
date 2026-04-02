@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { eq } from 'drizzle-orm'
+import { eq, and } from 'drizzle-orm'
 import type { Env } from '../../types'
 import { categories } from '../../db/schema'
 import {
@@ -8,36 +8,36 @@ import {
 } from '../validators/categories'
 import { generateUlid } from '../../lib/ulid'
 import { now } from '../../lib/timestamp'
-import { AppError } from '../middleware/error-handler'
+import { getCategoryForUser } from '../helpers/ownership'
 
 const app = new Hono<Env>()
 
 app.get('/', async (c) => {
   const db = c.get('db')
+  const userId = c.get('userId')
   const result = await db.query.categories.findMany({
+    where: eq(categories.userId, userId),
     orderBy: (cat, { asc }) => [asc(cat.sortOrder), asc(cat.name)],
   })
-  c.header('Cache-Control', 'public, max-age=300, stale-while-revalidate=60')
+  c.header('Cache-Control', 'private, max-age=300, stale-while-revalidate=60')
   return c.json({ success: true, data: result })
 })
 
 app.get('/:id', async (c) => {
   const db = c.get('db')
-  const category = await db.query.categories.findFirst({
-    where: eq(categories.id, c.req.param('id')),
-  })
-  if (!category) {
-    throw new AppError('Category not found', 404)
-  }
+  const userId = c.get('userId')
+  const category = await getCategoryForUser(db, c.req.param('id'), userId)
   return c.json({ success: true, data: category })
 })
 
 app.post('/', async (c) => {
   const db = c.get('db')
+  const userId = c.get('userId')
   const body = createCategorySchema.parse(await c.req.json())
   const timestamp = now()
   const category = {
     id: generateUlid(),
+    userId,
     ...body,
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -48,18 +48,17 @@ app.post('/', async (c) => {
 
 app.put('/:id', async (c) => {
   const db = c.get('db')
+  const userId = c.get('userId')
   const id = c.req.param('id')
   const body = updateCategorySchema.parse(await c.req.json())
 
-  const existing = await db.query.categories.findFirst({
-    where: eq(categories.id, id),
-  })
-  if (!existing) {
-    throw new AppError('Category not found', 404)
-  }
+  const existing = await getCategoryForUser(db, id, userId)
 
   const updated = { ...body, updatedAt: now() }
-  await db.update(categories).set(updated).where(eq(categories.id, id))
+  await db
+    .update(categories)
+    .set(updated)
+    .where(and(eq(categories.id, id), eq(categories.userId, userId)))
 
   return c.json({
     success: true,
@@ -69,16 +68,14 @@ app.put('/:id', async (c) => {
 
 app.delete('/:id', async (c) => {
   const db = c.get('db')
+  const userId = c.get('userId')
   const id = c.req.param('id')
 
-  const existing = await db.query.categories.findFirst({
-    where: eq(categories.id, id),
-  })
-  if (!existing) {
-    throw new AppError('Category not found', 404)
-  }
+  await getCategoryForUser(db, id, userId)
 
-  await db.delete(categories).where(eq(categories.id, id))
+  await db
+    .delete(categories)
+    .where(and(eq(categories.id, id), eq(categories.userId, userId)))
   return c.json({ success: true })
 })
 

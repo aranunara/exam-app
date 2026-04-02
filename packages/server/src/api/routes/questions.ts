@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
-import { eq } from 'drizzle-orm'
+import { eq, and, inArray } from 'drizzle-orm'
 import type { Env } from '../../types'
-import { questions, questionTags, choices } from '../../db/schema'
+import { questions, questionTags, choices, tags } from '../../db/schema'
 import {
   createQuestionSchema,
   updateQuestionSchema,
@@ -10,12 +10,15 @@ import {
 import { generateUlid } from '../../lib/ulid'
 import { now } from '../../lib/timestamp'
 import { AppError } from '../middleware/error-handler'
+import { getQuestionSetForUser } from '../helpers/ownership'
 
 const app = new Hono<Env>()
 
 app.post('/:setId/questions', async (c) => {
   const db = c.get('db')
+  const userId = c.get('userId')
   const setId = c.req.param('setId')
+  await getQuestionSetForUser(db, setId, userId)
   const body = createQuestionSchema.parse(await c.req.json())
   const timestamp = now()
 
@@ -37,6 +40,13 @@ app.post('/:setId/questions', async (c) => {
   await db.insert(questions).values(question)
 
   if (body.tagIds?.length) {
+    const userTags = await db
+      .select({ id: tags.id })
+      .from(tags)
+      .where(and(inArray(tags.id, body.tagIds), eq(tags.userId, userId)))
+    if (userTags.length !== body.tagIds.length) {
+      throw new AppError('One or more tags not found', 404)
+    }
     await db.insert(questionTags).values(
       body.tagIds.map((tagId) => ({
         questionId,
@@ -65,6 +75,9 @@ app.post('/:setId/questions', async (c) => {
 
 app.put('/:setId/questions/:id', async (c) => {
   const db = c.get('db')
+  const userId = c.get('userId')
+  const setId = c.req.param('setId')
+  await getQuestionSetForUser(db, setId, userId)
   const id = c.req.param('id')
   const body = updateQuestionSchema.parse(await c.req.json())
 
@@ -93,6 +106,15 @@ app.put('/:setId/questions/:id', async (c) => {
     .where(eq(questions.id, id))
 
   if (tagIds !== undefined) {
+    if (tagIds.length > 0) {
+      const userTags = await db
+        .select({ id: tags.id })
+        .from(tags)
+        .where(and(inArray(tags.id, tagIds), eq(tags.userId, userId)))
+      if (userTags.length !== tagIds.length) {
+        throw new AppError('One or more tags not found', 404)
+      }
+    }
     await db.delete(questionTags).where(eq(questionTags.questionId, id))
     if (tagIds.length > 0) {
       await db.insert(questionTags).values(
@@ -127,6 +149,9 @@ app.put('/:setId/questions/:id', async (c) => {
 
 app.delete('/:setId/questions/:id', async (c) => {
   const db = c.get('db')
+  const userId = c.get('userId')
+  const setId = c.req.param('setId')
+  await getQuestionSetForUser(db, setId, userId)
   const id = c.req.param('id')
 
   const existing = await db.query.questions.findFirst({
@@ -142,6 +167,9 @@ app.delete('/:setId/questions/:id', async (c) => {
 
 app.patch('/:setId/questions/reorder', async (c) => {
   const db = c.get('db')
+  const userId = c.get('userId')
+  const setId = c.req.param('setId')
+  await getQuestionSetForUser(db, setId, userId)
   const body = reorderQuestionsSchema.parse(await c.req.json())
 
   const timestamp = now()

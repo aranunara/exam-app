@@ -12,8 +12,8 @@ export interface ApiResponse<T> {
 
 export interface Category {
   id: string
+  userId: string
   name: string
-  slug: string
   description: string | null
   passScore: number | null
   sortOrder: number
@@ -23,6 +23,7 @@ export interface Category {
 
 export interface Tag {
   id: string
+  userId: string
   name: string
   color: string | null
   createdAt: string
@@ -55,6 +56,7 @@ export interface Question {
 
 export interface QuestionSet {
   id: string
+  userId: string
   categoryId: string
   title: string
   description: string | null
@@ -88,7 +90,6 @@ export interface SessionQuestion {
   body: string
   isMultiAnswer: boolean
   choices: Array<{ id: string; body: string }>
-  isFlagged: boolean
   isAnswered: boolean
   selectedChoiceIds: string[]
 }
@@ -114,7 +115,6 @@ export interface SessionResult {
     explanation: string | null
     isMultiAnswer: boolean
     isCorrect: boolean | null
-    isFlagged: boolean
     timeSpentSec: number | null
     confidenceLevel?: ConfidenceLevel
     selectedChoiceIds: string[]
@@ -125,6 +125,11 @@ export interface SessionResult {
       explanation: string | null
     }>
   }>
+}
+
+export interface FilterPreview {
+  totalQuestions: number
+  confidenceByQuestion: Record<string, number>
 }
 
 export interface StatsOverview {
@@ -150,6 +155,14 @@ export interface TagStats {
   totalAnswers: number
   correctAnswers: number
   correctRate: number
+}
+
+export interface QuestionSetScore {
+  questionSetId: string
+  recentScores: number[]
+  recentAvg: number | null
+  attempts: number
+  lastPlayedAt: string | null
 }
 
 export interface HistoryEntry extends ExamSession {
