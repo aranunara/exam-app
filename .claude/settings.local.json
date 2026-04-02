@@ -19,7 +19,18 @@
       "Bash(grep:*)",
       "Bash(wc:*)",
       "Bash(npx:*)",
-      "Bash(cat packages/web/src/hooks/*.ts)"
+      "Bash(cat packages/web/src/hooks/*.ts)",
+      "Read(//Users/takahashi/.claude/plugins/marketplaces/ui-ux-pro-max-skill/.claude/skills/ui-ux-pro-max/**)",
+      "Bash(python3 scripts/search.py \"education exam dashboard learning tool\" --design-system -p \"Exam App\" -f markdown)",
+      "Bash(python3 scripts/search.py \"dashboard stats cards progress\" --domain ux -n 10)",
+      "Bash(cat /Users/takahashi/Projects/exam-app/packages/web/src/styles/*)",
+      "Bash(python3 /Users/takahashi/.claude/plugins/cache/ui-ux-pro-max-skill/ui-ux-pro-max/2.5.0/.claude/skills/ui-ux-pro-max/scripts/search.py \"education exam dashboard productivity\" --design-system -p \"Exam App\")",
+      "Bash(mv admin-categories.tsx admin-subjects.tsx)",
+      "Bash(mv admin-question-sets.tsx admin-workbooks.tsx)",
+      "Bash(mv admin-question-set-edit.tsx admin-workbook-edit.tsx)",
+      "Bash(mv category-exams.tsx subject-exams.tsx)",
+      "Bash(mv question-set-history.tsx workbook-history.tsx)",
+      "WebFetch(domain:ics.media)"
     ]
   }
 }
