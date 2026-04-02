@@ -34,6 +34,12 @@ export const ChartIcon: ComponentType<IconProps> = ({ className }) => (
   </svg>
 )
 
+export const HistoryIcon: ComponentType<IconProps> = ({ className }) => (
+  <svg {...iconDefaults} className={className}>
+    <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+  </svg>
+)
+
 export const FolderIcon: ComponentType<IconProps> = ({ className }) => (
   <svg {...iconDefaults} className={className}>
     <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />

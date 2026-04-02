@@ -18,12 +18,10 @@ function HomeIcon({ active }: { active?: boolean }) {
   )
 }
 
-function StatsTabIcon({ active }: { active?: boolean }) {
+function HistoryTabIcon({ active }: { active?: boolean }) {
   return (
     <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.5 : 2} strokeLinecap="round" strokeLinejoin="round">
-      <line x1="18" y1="20" x2="18" y2="10" />
-      <line x1="12" y1="20" x2="12" y2="4" />
-      <line x1="6" y1="20" x2="6" y2="14" />
+      <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
     </svg>
   )
 }
@@ -39,7 +37,7 @@ function SettingsIcon({ active }: { active?: boolean }) {
 
 const tabs: Tab[] = [
   { to: '/dashboard', label: 'ホーム', icon: HomeIcon, matchPrefixes: ['/dashboard', '/exams'] },
-  { to: '/stats', label: '統計', icon: StatsTabIcon, matchPrefixes: ['/stats'] },
+  { to: '/stats', label: '履歴', icon: HistoryTabIcon, matchPrefixes: ['/stats'] },
   { to: '/admin/subjects', label: '管理', icon: SettingsIcon, matchPrefixes: ['/admin'] },
 ]
 
@@ -62,7 +60,7 @@ function SlidingIndicator({ pathname }: { pathname: string }) {
 
   return (
     <span
-      className="absolute top-0 left-0 flex h-[2px] w-1/3 justify-center motion-safe:transition-transform motion-safe:duration-250 ease-[var(--ease-spring)]"
+      className="absolute top-0 left-0 flex h-[2px] w-1/3 justify-center motion-safe:transition-transform motion-safe:duration-300 ease-[var(--ease-spring-bouncy)]"
       style={{ transform: `translateX(${activeIndex * 100}%)` }}
     >
       <span className="h-full w-8 rounded-full bg-primary" />

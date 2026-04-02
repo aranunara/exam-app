@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react'
 import {
   DashboardIcon,
-  ChartIcon,
+  HistoryIcon,
   FolderIcon,
   FileListIcon,
   TagIcon,
@@ -21,7 +21,7 @@ export interface NavGroup {
 
 export const navItems: NavItem[] = [
   { to: '/dashboard', label: 'ダッシュボード' },
-  { to: '/stats', label: '統計' },
+  { to: '/stats', label: '履歴' },
 ]
 
 export const adminNavItems: NavItem[] = [
@@ -36,7 +36,7 @@ export const sidebarNavGroups: NavGroup[] = [
     label: '',
     items: [
       { to: '/dashboard', label: 'ダッシュボード', icon: DashboardIcon },
-      { to: '/stats', label: '統計', icon: ChartIcon },
+      { to: '/stats', label: '履歴', icon: HistoryIcon },
     ],
   },
   {

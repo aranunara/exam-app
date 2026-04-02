@@ -545,34 +545,6 @@ const historyColumns: ColumnDef<HistoryEntry>[] = [
   },
 ]
 
-/* ─── Mobile: Compact Stats ─── */
-
-function MobileStats({ overview }: { overview: StatsOverview }) {
-  const correctRate =
-    overview.totalQuestions > 0
-      ? Math.round((overview.totalCorrect / overview.totalQuestions) * 100)
-      : 0
-
-  const items = [
-    { label: 'セッション', value: overview.totalSessions, suffix: '' },
-    { label: '平均', value: overview.avgScore, suffix: '%', colorClass: scoreColor(overview.avgScore) },
-    { label: '正答率', value: correctRate, suffix: '%', colorClass: scoreColor(correctRate) },
-  ]
-
-  return (
-    <div className="grid grid-cols-3 gap-3">
-      {items.map((item) => (
-        <div key={item.label} className="rounded-xl bg-card p-3 shadow-[0_1px_3px_rgba(0,0,0,0.08)] dark:border dark:border-border dark:shadow-none">
-          <p className="text-[11px] text-muted-foreground">{item.label}</p>
-          <p className={cn('mt-0.5 text-xl font-bold tabular-nums tracking-tight', item.colorClass)}>
-            <AnimatedNumber value={item.value} suffix={item.suffix} />
-          </p>
-        </div>
-      ))}
-    </div>
-  )
-}
-
 /* ─── Loading Skeleton ─── */
 
 function LoadingSkeleton() {
