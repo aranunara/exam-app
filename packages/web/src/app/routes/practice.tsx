@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useParams, useNavigate, useLocation } from 'react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   useExamStore,
@@ -7,17 +7,17 @@ import {
   useCurrentIndex,
   useTotalQuestions,
   useAnswers,
-  useFlags,
   useElapsedSec,
   useExamActions,
 } from '@/features/exam/stores/exam-store'
 import { api } from '@/lib/api-client'
 import { queryKeys } from '@/lib/query-keys'
 import { formatElapsed } from '@/lib/format'
-import type { ApiResponse, SessionQuestion, AnswerFeedback, ConfidenceLevel } from '@/types'
+import type { ApiResponse, SessionQuestion, AnswerFeedback, ConfidenceLevel, FilterPreview } from '@/types'
 import { MarkdownRenderer } from '@/components/shared/markdown-renderer'
 import { LoadingSpinner } from '@/components/shared/loading-spinner'
 import { ConfidenceSelector } from '@/components/shared/confidence-selector'
+import { confidenceLevels } from '@/lib/confidence-config'
 import { MobileQuestionNav } from '@/components/shared/mobile-question-nav'
 
 function PracticeTimer() {
@@ -45,12 +45,10 @@ export default function PracticePage() {
   const currentIndex = useCurrentIndex()
   const totalQuestions = useTotalQuestions()
   const answers = useAnswers()
-  const flags = useFlags()
   const {
     startSession,
     setCurrentIndex,
     setAnswer,
-    toggleFlag,
     incrementElapsed,
     recordQuestionTime,
     complete,
@@ -66,12 +64,52 @@ export default function PracticePage() {
 
   const { feedback, confidenceLevel } = answerState
   const questionStartTime = useRef<number>(Date.now())
+  const feedbackCache = useRef<Record<number, { feedback: AnswerFeedback | null; confidenceLevel: ConfidenceLevel }>>({})
+
+  const location = useLocation()
+  const [isConfirmed, setIsConfirmed] = useState(false)
+  const [showAbortConfirm, setShowAbortConfirm] = useState(false)
+  const [filterConfidenceLevels, setFilterConfidenceLevels] = useState<number[]>([])
+  const previewInfo = location.state as { title?: string; questionCount?: number; timeLimit?: number | null } | null
+
+  const previewQuery = useQuery({
+    queryKey: queryKeys.sessions.previewFilter(questionSetId ?? ''),
+    queryFn: () =>
+      api.post<ApiResponse<FilterPreview>>('/sessions/preview-filter', {
+        questionSetId,
+      }),
+    enabled: !!questionSetId && !isConfirmed,
+    staleTime: 0,
+  })
+
+  const filterPreview = previewQuery.data?.data
+  const hasActiveFilter = filterConfidenceLevels.length > 0
+
+  const filteredCount = useMemo(() => {
+    if (!filterPreview) return previewInfo?.questionCount ?? 0
+    if (!hasActiveFilter) return filterPreview.totalQuestions
+
+    return Object.values(filterPreview.confidenceByQuestion).filter(
+      (level) => filterConfidenceLevels.includes(level),
+    ).length
+  }, [filterPreview, filterConfidenceLevels, hasActiveFilter, previewInfo?.questionCount])
+
+  const toggleConfidenceLevel = useCallback((level: number) => {
+    setFilterConfidenceLevels((prev) =>
+      prev.includes(level)
+        ? prev.filter((l) => l !== level)
+        : [...prev, level],
+    )
+  }, [])
 
   const createSessionMutation = useMutation({
     mutationFn: () =>
       api.post<CreateSessionResponse>('/sessions', {
         questionSetId,
         mode: 'practice',
+        ...(filterConfidenceLevels.length > 0
+          ? { filters: { confidenceLevels: filterConfidenceLevels } }
+          : {}),
       }),
     onSuccess: (response) => {
       if (response.data) {
@@ -86,8 +124,8 @@ export default function PracticePage() {
   })
 
   useEffect(() => {
+    setIsConfirmed(false)
     reset()
-    createSessionMutation.mutate()
     return () => {
       const state = useExamStore.getState()
       if (state.sessionId && !state.isCompleted && Object.keys(state.answers).length > 0) {
@@ -101,12 +139,28 @@ export default function PracticePage() {
   }, [questionSetId])
 
   useEffect(() => {
+    if (isConfirmed) {
+      createSessionMutation.mutate()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isConfirmed])
+
+  useEffect(() => {
     if (!sessionId) return
     const interval = setInterval(() => {
       incrementElapsed()
     }, 1000)
     return () => clearInterval(interval)
   }, [sessionId, incrementElapsed])
+
+  useEffect(() => {
+    if (!sessionId) return
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [sessionId])
 
   const questionQuery = useQuery({
     queryKey: queryKeys.sessions.question(sessionId ?? '', currentIndex),
@@ -140,7 +194,8 @@ export default function PracticePage() {
     if (question) {
       const stored = answers[currentIndex]
       setSelectedChoiceIds(stored ?? question.selectedChoiceIds ?? [])
-      setAnswerState({ feedback: null, confidenceLevel: 0 })
+      const cached = feedbackCache.current[currentIndex]
+      setAnswerState(cached ?? { feedback: null, confidenceLevel: 0 })
       questionStartTime.current = Date.now()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -208,30 +263,19 @@ export default function PracticePage() {
     setAnswer,
   ])
 
+  useEffect(() => {
+    if (answerState.feedback) {
+      feedbackCache.current[currentIndex] = answerState
+    }
+  }, [answerState, currentIndex])
+
   const handleNavigate = useCallback(
     (index: number) => {
       if (index < 0 || index >= totalQuestions) return
-      setAnswerState({ feedback: null, confidenceLevel: 0 })
       setCurrentIndex(index)
     },
     [totalQuestions, setCurrentIndex],
   )
-
-  const handleToggleFlag = useCallback(async () => {
-    if (!sessionId || !question) return
-    toggleFlag(currentIndex)
-    try {
-      await api.post(`/sessions/${sessionId}/flag`, {
-        questionId: question.questionId,
-        isFlagged: !flags[currentIndex],
-      })
-    } catch (error) {
-      toggleFlag(currentIndex)
-      throw new Error(
-        error instanceof Error ? error.message : 'Failed to toggle flag',
-      )
-    }
-  }, [sessionId, question, currentIndex, flags, toggleFlag])
 
   const handleComplete = useCallback(async () => {
     if (!sessionId) return
@@ -251,6 +295,20 @@ export default function PracticePage() {
       )
     }
   }, [sessionId, questionSetId, navigate, complete, queryClient])
+
+  const handleAbort = useCallback(async () => {
+    if (sessionId) {
+      try {
+        const currentElapsed = useExamStore.getState().elapsedSec
+        await api.post(`/sessions/${sessionId}/complete`, {
+          timeSpentSec: currentElapsed,
+        })
+      } catch {}
+    }
+    complete()
+    reset()
+    navigate(-1)
+  }, [sessionId, navigate, complete, reset])
 
   const keyHandlerRef = useRef<(e: KeyboardEvent) => void>(() => {})
   keyHandlerRef.current = (e: KeyboardEvent) => {
@@ -294,9 +352,6 @@ export default function PracticePage() {
           handleNavigate(currentIndex - 1)
         }
         break
-      case 'f':
-        handleToggleFlag()
-        break
     }
   }
 
@@ -306,12 +361,95 @@ export default function PracticePage() {
     return () => window.removeEventListener('keydown', handler)
   }, [])
 
+  if (!isConfirmed) {
+    const confidenceCounts = filterPreview
+      ? confidenceLevels.map((config) => ({
+          ...config,
+          count: Object.values(filterPreview.confidenceByQuestion).filter(
+            (l) => l === config.level,
+          ).length,
+        }))
+      : []
+
+    return (
+      <div className="mx-auto max-w-lg p-4">
+        <div className="rounded-lg border bg-card p-8">
+          <h1 className="text-center text-2xl font-bold">演習モード</h1>
+          {previewInfo?.title && (
+            <p className="mt-2 text-center text-muted-foreground">{previewInfo.title}</p>
+          )}
+          <div className="mt-6 flex justify-center text-sm text-muted-foreground">
+            <div className="text-center">
+              <p className="text-2xl font-bold text-foreground">
+                {hasActiveFilter ? filteredCount : (previewInfo?.questionCount ?? filterPreview?.totalQuestions ?? '—')}
+              </p>
+              <p>{hasActiveFilter ? `/ ${filterPreview?.totalQuestions ?? previewInfo?.questionCount ?? ''} 問中` : '問題数'}</p>
+            </div>
+          </div>
+
+          {filterPreview && confidenceCounts.some((c) => c.count > 0) && (
+            <div className="mt-6 space-y-4">
+              <p className="text-center text-xs text-muted-foreground">自信度で絞り込み</p>
+
+              <div className="flex flex-wrap gap-2">
+                {confidenceCounts.map((config) => {
+                  if (config.count === 0) return null
+                  const isActive = filterConfidenceLevels.includes(config.level)
+                  return (
+                    <button
+                      key={config.level}
+                      type="button"
+                      onClick={() => toggleConfidenceLevel(config.level)}
+                      className={`min-h-[44px] rounded-lg border px-3 py-2 text-sm transition-colors ${
+                        isActive
+                          ? `${config.bgClass} ${config.textClass} ${config.borderClass}`
+                          : 'border-border bg-card text-muted-foreground hover:bg-muted'
+                      }`}
+                    >
+                      {config.label}
+                      <span className="ml-1.5 text-xs opacity-70">{config.count}</span>
+                    </button>
+                  )
+                })}
+              </div>
+
+              {hasActiveFilter && filteredCount === 0 && (
+                <p className="text-center text-sm text-destructive">
+                  条件に一致する問題がありません
+                </p>
+              )}
+            </div>
+          )}
+
+          <p className="mt-6 text-center text-sm text-muted-foreground">
+            各問題ごとに正解・解説を確認できます。
+          </p>
+          <div className="mt-6 flex justify-center gap-3">
+            <button
+              onClick={() => navigate(-1)}
+              className="min-h-[44px] rounded-lg border px-6 py-2.5 text-sm font-medium hover:bg-muted"
+            >
+              戻る
+            </button>
+            <button
+              onClick={() => setIsConfirmed(true)}
+              disabled={hasActiveFilter && filteredCount === 0}
+              className="min-h-[44px] rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 active:scale-[0.97] disabled:opacity-50"
+            >
+              開始
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   if (createSessionMutation.isPending) {
     return (
       <div className="flex h-64 items-center justify-center">
         <div className="text-center">
           <div className="mx-auto mb-4 flex justify-center">
-            <LoadingSpinner label="演習セッションを開始しています\u2026" />
+            <LoadingSpinner label="演習セッションを開始しています…" />
           </div>
         </div>
       </div>
@@ -347,7 +485,15 @@ export default function PracticePage() {
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-4 pb-16 md:pb-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">演習モード</h1>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowAbortConfirm(true)}
+            className="min-h-[44px] rounded-lg border px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            中止
+          </button>
+          <h1 className="text-xl font-bold">演習モード</h1>
+        </div>
         <div className="flex items-center gap-4">
           <PracticeTimer />
           <span className="text-sm text-muted-foreground">
@@ -356,28 +502,55 @@ export default function PracticePage() {
         </div>
       </div>
 
+      <div className="flex items-center gap-3">
+        <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full rounded-full bg-primary transition-all duration-400 ease-[var(--ease-spring)]"
+            style={{ width: `${(Object.keys(answers).length / totalQuestions) * 100}%` }}
+          />
+        </div>
+        <span className="text-xs tabular-nums text-muted-foreground">
+          {Object.keys(answers).length}/{totalQuestions}
+        </span>
+      </div>
+
+      {showAbortConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="mx-4 w-full max-w-sm rounded-lg border bg-card p-6 shadow-lg">
+            <h2 className="text-lg font-semibold">演習を中止しますか？</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              回答済みの内容は記録されます。
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={() => setShowAbortConfirm(false)}
+                className="min-h-[44px] rounded-lg border px-4 py-2 text-sm hover:bg-muted"
+              >
+                続ける
+              </button>
+              <button
+                onClick={handleAbort}
+                className="min-h-[44px] rounded-lg bg-destructive px-4 py-2 text-sm text-destructive-foreground hover:bg-destructive/90"
+              >
+                中止する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
         <div className="md:col-span-3 space-y-6">
-          <div className="rounded-lg border bg-card p-6">
+          <div key={currentIndex} className="rounded-lg border bg-card p-6 motion-safe:motion-preset-fade motion-safe:motion-duration-200">
             <div className="mb-4 flex items-center justify-between">
               <span className="text-sm font-medium text-muted-foreground">
                 問題 {currentIndex + 1}
                 {question.isMultiAnswer && (
-                  <span className="ml-2 rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                  <span className="ml-2 rounded bg-info-muted px-2 py-0.5 text-xs text-info-foreground">
                     複数回答
                   </span>
                 )}
               </span>
-              <button
-                onClick={handleToggleFlag}
-                className={`min-h-[44px] rounded px-3 py-2 text-sm ${
-                  !!flags[currentIndex]
-                    ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
-                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                }`}
-              >
-                {!!flags[currentIndex] ? 'フラグ付き' : 'フラグ'}
-              </button>
             </div>
 
             <div className="mb-6">
@@ -399,9 +572,9 @@ export default function PracticePage() {
                 if (feedback && feedbackChoice) {
                   if (feedbackChoice.isCorrect) {
                     choiceStyle =
-                      'border-green-500 bg-green-50 dark:bg-green-950'
+                      'border-success/30 bg-success-muted'
                   } else if (isSelected && !feedbackChoice.isCorrect) {
-                    choiceStyle = 'border-red-500 bg-red-50 dark:bg-red-950'
+                    choiceStyle = 'border-danger/30 bg-danger-muted'
                   }
                 } else if (isSelected) {
                   choiceStyle = 'border-primary bg-primary/5'
@@ -414,7 +587,7 @@ export default function PracticePage() {
                       disabled={!!feedback}
                       role={question.isMultiAnswer ? 'checkbox' : 'radio'}
                       aria-checked={isSelected}
-                      className={`flex w-full items-start gap-3 rounded-lg border p-4 text-left transition-colors ${choiceStyle} disabled:cursor-default`}
+                      className={`flex w-full items-start gap-3 rounded-lg border p-4 text-left motion-safe:transition-all motion-safe:duration-150 ${choiceStyle} disabled:cursor-default`}
                     >
                       <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-medium">
                         {idx + 1}
@@ -427,7 +600,7 @@ export default function PracticePage() {
                           {feedbackChoice.isCorrect ? (
                             <svg
                               aria-hidden="true"
-                              className="h-5 w-5 text-green-600 dark:text-green-400"
+                              className="h-5 w-5 text-success"
                               fill="none"
                               viewBox="0 0 24 24"
                               stroke="currentColor"
@@ -442,7 +615,7 @@ export default function PracticePage() {
                           ) : isSelected ? (
                             <svg
                               aria-hidden="true"
-                              className="h-5 w-5 text-red-600 dark:text-red-400"
+                              className="h-5 w-5 text-danger"
                               fill="none"
                               viewBox="0 0 24 24"
                               stroke="currentColor"
@@ -501,7 +674,7 @@ export default function PracticePage() {
                       )}
                     </button>
                     {feedback && feedbackChoice?.explanation && (
-                      <div className="ml-9 mt-1 rounded border-l-2 border-muted pl-3 text-sm text-muted-foreground">
+                      <div className="ml-9 mt-1 rounded bg-muted/40 px-3 py-1.5 text-sm text-muted-foreground">
                         <MarkdownRenderer content={feedbackChoice.explanation} />
                       </div>
                     )}
@@ -513,17 +686,17 @@ export default function PracticePage() {
 
           {feedback && (
             <div
-              className={`rounded-lg border p-4 ${
+              className={`rounded-lg border p-4 motion-safe:motion-preset-slide-up motion-safe:motion-duration-300 ${
                 feedback.isCorrect
-                  ? 'border-green-500 bg-green-50 dark:bg-green-950'
-                  : 'border-red-500 bg-red-50 dark:bg-red-950'
+                  ? 'border-success/30 bg-success-muted'
+                  : 'border-danger/30 bg-danger-muted'
               }`}
             >
               <p
                 className={`mb-2 flex items-center gap-2 font-semibold ${
                   feedback.isCorrect
-                    ? 'text-green-700 dark:text-green-300'
-                    : 'text-red-700 dark:text-red-300'
+                    ? 'text-success-foreground'
+                    : 'text-danger-foreground'
                 }`}
               >
                 {feedback.isCorrect ? (
@@ -554,7 +727,7 @@ export default function PracticePage() {
             </div>
           )}
 
-          <div className="flex items-center justify-between border-t pt-6">
+          <div className="hidden items-center justify-between border-t pt-6 md:flex">
             <button
               onClick={() => handleNavigate(currentIndex - 1)}
               disabled={currentIndex === 0}
@@ -566,21 +739,21 @@ export default function PracticePage() {
               <button
                 onClick={handleSubmitAnswer}
                 disabled={selectedChoiceIds.length === 0 || isSubmitting}
-                className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSubmitting ? '送信中...' : '答え合わせ'}
               </button>
             ) : currentIndex >= totalQuestions - 1 ? (
               <button
                 onClick={handleComplete}
-                className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 active:scale-[0.97]"
               >
                 結果を見る
               </button>
             ) : (
               <button
                 onClick={() => handleNavigate(currentIndex + 1)}
-                className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 active:scale-[0.97]"
               >
                 次へ
               </button>
@@ -594,14 +767,13 @@ export default function PracticePage() {
             <div className="grid grid-cols-5 gap-1">
               {Array.from({ length: totalQuestions }, (_, i) => {
                 const isAnswered = i in answers
-                const isFlagged = !!flags[i]
                 const isCurrent = i === currentIndex
 
                 let btnStyle = 'bg-muted text-muted-foreground'
                 if (isCurrent) {
                   btnStyle = 'bg-primary text-primary-foreground ring-2 ring-primary ring-offset-1'
                 } else if (isAnswered) {
-                  btnStyle = 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                  btnStyle = 'bg-success-muted text-success-foreground'
                 }
 
                 return (
@@ -611,23 +783,14 @@ export default function PracticePage() {
                     className={`relative flex h-8 w-full items-center justify-center rounded text-xs font-medium ${btnStyle}`}
                   >
                     {i + 1}
-                    {isFlagged && (
-                      <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-yellow-500" />
-                    )}
                   </button>
                 )
               })}
             </div>
             <div className="mt-4 space-y-1 text-xs text-muted-foreground">
               <div className="flex items-center gap-2">
-                <span className="inline-block h-3 w-3 rounded bg-green-100 dark:bg-green-900" />
+                <span className="inline-block h-3 w-3 rounded bg-success-muted" />
                 回答済み
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="relative inline-block h-3 w-3 rounded bg-muted">
-                  <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-yellow-500" />
-                </span>
-                フラグ付き
               </div>
               <div className="flex items-center gap-2">
                 <span className="inline-block h-3 w-3 rounded bg-primary" />
@@ -643,8 +806,12 @@ export default function PracticePage() {
         currentIndex={currentIndex}
         totalQuestions={totalQuestions}
         answers={answers}
-        flags={flags}
         onNavigate={handleNavigate}
+        onComplete={handleComplete}
+        showCompleteButton={!!feedback && currentIndex >= totalQuestions - 1}
+        onSubmitAnswer={handleSubmitAnswer}
+        canSubmit={selectedChoiceIds.length > 0 && !feedback}
+        isSubmitting={isSubmitting}
       />
     </div>
   )

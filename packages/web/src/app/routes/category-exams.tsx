@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api-client'
 import { queryKeys } from '@/lib/query-keys'
 import { ErrorMessage } from '@/components/shared/error-message'
+import { StaggerChildren } from '@/components/shared/stagger-children'
 import type { ApiResponse, Category, QuestionSet } from '@/types'
 
 function CategoryHeader({ category }: { category: Category }) {
@@ -41,7 +42,7 @@ function QuestionSetCard({ questionSet }: { questionSet: QuestionSet }) {
   const questionCount = questionSet.questionCount ?? questionSet.questions?.length
 
   return (
-    <div className="rounded-lg border bg-card p-5 shadow-sm">
+    <div className="rounded-lg border bg-card p-5 shadow-sm motion-safe:hover:-translate-y-0.5 motion-safe:transition-[transform,box-shadow] motion-safe:duration-200 motion-safe:hover:shadow-md">
       <div className="mb-4">
         <h3 className="font-semibold">{questionSet.title}</h3>
         {questionSet.description && (
@@ -94,15 +95,27 @@ function QuestionSetCard({ questionSet }: { questionSet: QuestionSet }) {
           )}
         </div>
       </div>
-      <div className="flex gap-3">
+      <div className="flex items-center gap-3">
+        <Link
+          to={`/question-sets/${questionSet.id}/history`}
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+          </svg>
+          履歴
+        </Link>
+        <span className="flex-1" />
         <Link
           to={`/practice/${questionSet.id}`}
+          state={{ title: questionSet.title, questionCount, timeLimit: questionSet.timeLimit }}
           className="inline-flex items-center rounded-md border px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
         >
           演習
         </Link>
         <Link
           to={`/exam/${questionSet.id}`}
+          state={{ title: questionSet.title, questionCount, timeLimit: questionSet.timeLimit }}
           className="inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
         >
           実戦
@@ -202,11 +215,11 @@ export default function CategoryExams() {
       {questionSets.length === 0 ? (
         <EmptyState />
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <StaggerChildren staggerMs={60} className="grid gap-4 sm:grid-cols-2">
           {questionSets.map((qs) => (
             <QuestionSetCard key={qs.id} questionSet={qs} />
           ))}
-        </div>
+        </StaggerChildren>
       )}
     </div>
   )

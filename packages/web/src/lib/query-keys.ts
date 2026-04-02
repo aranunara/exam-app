@@ -18,13 +18,21 @@ export const queryKeys = {
     question: (sessionId: string, index: number) =>
       ['sessions', sessionId, 'questions', index] as const,
     results: (id: string) => ['sessions', id, 'results'] as const,
+    previewFilter: (questionSetId: string) =>
+      ['sessions', 'preview-filter', questionSetId] as const,
   },
   stats: {
-    overview: ['stats', 'overview'] as const,
-    categories: ['stats', 'categories'] as const,
-    tags: ['stats', 'tags'] as const,
-    history: (page: number) => ['stats', 'history', page] as const,
-    weakAreas: ['stats', 'weakAreas'] as const,
+    overview: (filters?: Record<string, string>) =>
+      ['stats', 'overview', filters ?? {}] as const,
+    categories: (filters?: Record<string, string>) =>
+      ['stats', 'categories', filters ?? {}] as const,
+    tags: (filters?: Record<string, string>) =>
+      ['stats', 'tags', filters ?? {}] as const,
+    history: (page: number, filters?: Record<string, string>) =>
+      ['stats', 'history', page, filters ?? {}] as const,
+    weakAreas: (filters?: Record<string, string>) =>
+      ['stats', 'weakAreas', filters ?? {}] as const,
+    questionSetScores: ['stats', 'questionSetScores'] as const,
   },
   confidence: {
     byQuestion: (questionId: string) =>

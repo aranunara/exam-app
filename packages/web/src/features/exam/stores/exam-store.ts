@@ -7,7 +7,6 @@ type ExamState = {
   currentIndex: number
   totalQuestions: number
   answers: Record<number, string[]>
-  flags: Record<number, boolean>
   timeLimit: number | null
   startedAt: number | null
   elapsedSec: number
@@ -24,7 +23,6 @@ type ExamActions = {
   }) => void
   setCurrentIndex: (index: number) => void
   setAnswer: (index: number, choiceIds: string[]) => void
-  toggleFlag: (index: number) => void
   incrementElapsed: () => void
   recordQuestionTime: (index: number, seconds: number) => void
   complete: () => void
@@ -37,7 +35,6 @@ const initialState: ExamState = {
   currentIndex: 0,
   totalQuestions: 0,
   answers: {},
-  flags: {},
   timeLimit: null,
   startedAt: null,
   elapsedSec: 0,
@@ -65,14 +62,6 @@ export const useExamStore = create<ExamState & ExamActions>((set) => ({
       answers: { ...state.answers, [index]: choiceIds },
     })),
 
-  toggleFlag: (index) =>
-    set((state) => {
-      const { [index]: current, ...rest } = state.flags
-      return {
-        flags: current ? rest : { ...state.flags, [index]: true },
-      }
-    }),
-
   incrementElapsed: () =>
     set((state) => ({ elapsedSec: state.elapsedSec + 1 })),
 
@@ -98,15 +87,12 @@ export const useElapsedSec = () => useExamStore((s) => s.elapsedSec)
 export const useTimeLimit = () => useExamStore((s) => s.timeLimit)
 export const useIsCompleted = () => useExamStore((s) => s.isCompleted)
 export const useAnswers = () => useExamStore((s) => s.answers)
-export const useFlags = () => useExamStore((s) => s.flags)
-
 export const useExamActions = () =>
   useExamStore(
     useShallow((s) => ({
       startSession: s.startSession,
       setCurrentIndex: s.setCurrentIndex,
       setAnswer: s.setAnswer,
-      toggleFlag: s.toggleFlag,
       incrementElapsed: s.incrementElapsed,
       recordQuestionTime: s.recordQuestionTime,
       complete: s.complete,

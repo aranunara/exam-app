@@ -70,8 +70,8 @@ function QuestionReview({
     <div
       className={`rounded-lg border p-6 ${
         isCorrect
-          ? 'border-green-200 dark:border-green-900/50'
-          : 'border-red-200 dark:border-red-900/50'
+          ? 'border-success/30'
+          : 'border-danger/30'
       }`}
     >
       <div className="mb-4 flex items-center justify-between">
@@ -80,21 +80,16 @@ function QuestionReview({
             問題 {index + 1}
           </span>
           {item.isMultiAnswer && (
-            <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
+            <span className="rounded-full bg-info-muted px-2 py-0.5 text-xs font-medium text-info-foreground">
               複数回答
-            </span>
-          )}
-          {item.isFlagged && (
-            <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
-              フラグ付き
             </span>
           )}
         </div>
         <span
           className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${
             isCorrect
-              ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-              : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+              ? 'bg-success-muted text-success-foreground'
+              : 'bg-danger-muted text-danger-foreground'
           }`}
         >
           {isCorrect ? '正解' : '不正解'}
@@ -113,13 +108,13 @@ function QuestionReview({
           let choiceStyle = 'border bg-card'
           if (wasSelected && isChoiceCorrect) {
             choiceStyle =
-              'border-green-300 bg-green-50 dark:border-green-800 dark:bg-green-950/30'
+              'border-success/30 bg-success-muted'
           } else if (wasSelected && !isChoiceCorrect) {
             choiceStyle =
-              'border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/30'
+              'border-danger/30 bg-danger-muted'
           } else if (isChoiceCorrect) {
             choiceStyle =
-              'border-green-200 bg-green-50/50 dark:border-green-900/50 dark:bg-green-950/10'
+              'border-success/30 bg-success-muted'
           }
 
           return (
@@ -130,17 +125,17 @@ function QuestionReview({
               <div className="flex items-start gap-2">
                 <span className="mt-0.5 flex-shrink-0">
                   {wasSelected && isChoiceCorrect && (
-                    <span className="text-green-600 dark:text-green-400">
+                    <span className="text-success">
                       &#10003;
                     </span>
                   )}
                   {wasSelected && !isChoiceCorrect && (
-                    <span className="text-red-600 dark:text-red-400">
+                    <span className="text-danger">
                       &#10007;
                     </span>
                   )}
                   {!wasSelected && isChoiceCorrect && (
-                    <span className="text-green-600 dark:text-green-400">
+                    <span className="text-success">
                       &#9679;
                     </span>
                   )}
@@ -163,8 +158,8 @@ function QuestionReview({
       </div>
 
       {item.explanation && (
-        <div className="mt-4 rounded-md border bg-blue-50 p-4 dark:bg-blue-950/20">
-          <p className="mb-2 text-sm font-semibold text-blue-700 dark:text-blue-400">
+        <div className="mt-4 rounded-md border bg-info-muted p-4">
+          <p className="mb-2 text-sm font-semibold text-info-foreground">
             解説
           </p>
           <MarkdownRenderer content={item.explanation} />

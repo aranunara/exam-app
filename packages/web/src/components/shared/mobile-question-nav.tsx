@@ -1,22 +1,35 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 
 interface MobileQuestionNavProps {
   currentIndex: number
   totalQuestions: number
   answers: Record<number, string[]>
-  flags: Record<number, boolean>
   onNavigate: (index: number) => void
+  onComplete?: () => void
+  showCompleteButton?: boolean
+  onSubmitAnswer?: () => void
+  canSubmit?: boolean
+  isSubmitting?: boolean
 }
 
 export function MobileQuestionNav({
   currentIndex,
   totalQuestions,
   answers,
-  flags,
   onNavigate,
+  onComplete,
+  showCompleteButton,
+  onSubmitAnswer,
+  canSubmit,
+  isSubmitting,
 }: MobileQuestionNavProps) {
   const [isExpanded, setIsExpanded] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
+
+  useEffect(() => {
+    if (!isExpanded) setShowConfirm(false)
+  }, [isExpanded])
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-40 md:hidden">
@@ -56,7 +69,6 @@ export function MobileQuestionNav({
             <div className="grid grid-cols-5 gap-1.5">
               {Array.from({ length: totalQuestions }, (_, i) => {
                 const isAnswered = i in answers
-                const isFlagged = !!flags[i]
                 const isCurrent = i === currentIndex
 
                 let btnStyle = 'bg-muted text-muted-foreground'
@@ -65,7 +77,7 @@ export function MobileQuestionNav({
                     'bg-primary text-primary-foreground ring-2 ring-primary ring-offset-1'
                 } else if (isAnswered) {
                   btnStyle =
-                    'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                    'bg-success-muted text-success-foreground'
                 }
 
                 return (
@@ -81,9 +93,6 @@ export function MobileQuestionNav({
                     )}
                   >
                     {i + 1}
-                    {isFlagged && (
-                      <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-yellow-500" />
-                    )}
                   </button>
                 )
               })}
@@ -91,14 +100,8 @@ export function MobileQuestionNav({
 
             <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
               <div className="flex items-center gap-1.5">
-                <span className="inline-block h-3 w-3 rounded bg-green-100 dark:bg-green-900" />
+                <span className="inline-block h-3 w-3 rounded bg-success-muted" />
                 回答済み
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="relative inline-block h-3 w-3 rounded bg-muted">
-                  <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-yellow-500" />
-                </span>
-                フラグ
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="inline-block h-3 w-3 rounded bg-primary" />
@@ -108,8 +111,50 @@ export function MobileQuestionNav({
 
             <p className="mt-2 text-xs text-muted-foreground">
               回答済み: {Object.keys(answers).length} / {totalQuestions}
-              {Object.values(flags).filter(Boolean).length > 0 && ` | フラグ: ${Object.values(flags).filter(Boolean).length}`}
             </p>
+
+            {onComplete && (
+              <div className="mt-3 border-t pt-3">
+                {showConfirm ? (
+                  <div className="space-y-2">
+                    {totalQuestions - Object.keys(answers).length > 0 && (
+                      <p className="text-center text-sm text-warning-foreground">
+                        未回答: {totalQuestions - Object.keys(answers).length}問
+                      </p>
+                    )}
+                    <p className="text-center text-sm text-muted-foreground">
+                      提出しますか？
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onComplete()
+                        setShowConfirm(false)
+                        setIsExpanded(false)
+                      }}
+                      className="w-full rounded-lg bg-primary py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                    >
+                      はい、提出する
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirm(false)}
+                      className="w-full rounded-lg border py-2.5 text-sm hover:bg-muted"
+                    >
+                      キャンセル
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirm(true)}
+                    className="w-full rounded-lg bg-primary py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                  >
+                    提出
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </>
       )}
@@ -132,14 +177,33 @@ export function MobileQuestionNav({
           Q {currentIndex + 1}/{totalQuestions}
         </button>
 
-        <button
-          type="button"
-          onClick={() => onNavigate(currentIndex + 1)}
-          disabled={currentIndex >= totalQuestions - 1}
-          className="min-h-[44px] rounded-lg border px-4 text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          次へ
-        </button>
+        {onSubmitAnswer && canSubmit ? (
+          <button
+            type="button"
+            onClick={onSubmitAnswer}
+            disabled={isSubmitting}
+            className="min-h-[44px] rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 active:scale-[0.97] disabled:opacity-50"
+          >
+            {isSubmitting ? '送信中...' : '答え合わせ'}
+          </button>
+        ) : showCompleteButton && onComplete ? (
+          <button
+            type="button"
+            onClick={onComplete}
+            className="min-h-[44px] rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 active:scale-[0.97]"
+          >
+            結果を見る
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onNavigate(currentIndex + 1)}
+            disabled={currentIndex >= totalQuestions - 1}
+            className="min-h-[44px] rounded-lg border px-4 text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            次へ
+          </button>
+        )}
       </div>
     </div>
   )

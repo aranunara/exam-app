@@ -7,6 +7,7 @@ import type { ApiResponse, SessionResult, ConfidenceLevel } from '@/types'
 import { MarkdownRenderer } from '@/components/shared/markdown-renderer'
 import { LoadingSpinner } from '@/components/shared/loading-spinner'
 import { ConfidenceSelector } from '@/components/shared/confidence-selector'
+import { AnimatedNumber } from '@/components/shared/animated-number'
 
 function ScoreSummary({
   result,
@@ -28,18 +29,18 @@ function ScoreSummary({
           <div
             className={`text-5xl font-bold tabular-nums ${
               isPassed === true
-                ? 'text-green-600 dark:text-green-400'
+                ? 'text-success'
                 : isPassed === false
-                  ? 'text-red-600 dark:text-red-400'
+                  ? 'text-danger'
                   : 'text-foreground'
             }`}
           >
-            {scorePercent}%
+            <AnimatedNumber value={scorePercent} duration={800} delay={200} suffix="%" />
           </div>
           <p className="mt-1 text-sm text-muted-foreground">スコア</p>
         </div>
 
-        <div className="text-center">
+        <div className="text-center motion-safe:motion-preset-slide-up motion-safe:motion-duration-300" style={{ animationDelay: '400ms' }}>
           <div className="text-3xl font-bold">
             {session.correctCount ?? 0}{' '}
             <span className="text-lg text-muted-foreground">
@@ -50,7 +51,7 @@ function ScoreSummary({
         </div>
 
         {session.timeSpentSec != null && (
-          <div className="text-center">
+          <div className="text-center motion-safe:motion-preset-slide-up motion-safe:motion-duration-300" style={{ animationDelay: '500ms' }}>
             <div className="text-3xl font-bold">
               {Math.floor(session.timeSpentSec / 60)}
               <span className="text-lg text-muted-foreground">m</span>{' '}
@@ -62,12 +63,12 @@ function ScoreSummary({
         )}
 
         {isPassed !== null && (
-          <div className="text-center">
+          <div className="text-center motion-safe:motion-preset-fade motion-safe:motion-duration-300" style={{ animationDelay: '600ms' }}>
             <div
               className={`inline-block rounded-full px-4 py-2 text-lg font-bold ${
                 isPassed
-                  ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                  : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
+                  ? 'bg-success-muted text-success-foreground'
+                  : 'bg-danger-muted text-danger-foreground'
               }`}
             >
               {isPassed ? '合格' : '不合格'}
@@ -98,8 +99,8 @@ function QuestionReview({
     <div
       className={`rounded-lg border p-6 ${
         isCorrect
-          ? 'border-green-200 dark:border-green-800'
-          : 'border-red-200 dark:border-red-800'
+          ? 'border-success/30'
+          : 'border-danger/30'
       }`}
     >
       <div className="mb-4 flex items-center justify-between">
@@ -107,8 +108,8 @@ function QuestionReview({
           <span
             className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
               isCorrect
-                ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
+                ? 'bg-success-muted text-success-foreground'
+                : 'bg-danger-muted text-danger-foreground'
             }`}
           >
             {index + 1}
@@ -116,17 +117,12 @@ function QuestionReview({
           <span
             className={`text-sm font-medium ${
               isCorrect
-                ? 'text-green-700 dark:text-green-300'
-                : 'text-red-700 dark:text-red-300'
+                ? 'text-success-foreground'
+                : 'text-danger-foreground'
             }`}
           >
             {isCorrect ? '正解' : '不正解'}
           </span>
-          {result.isFlagged && (
-            <span className="rounded bg-yellow-100 px-2 py-0.5 text-xs text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300">
-              フラグ付き
-            </span>
-          )}
         </div>
         {result.timeSpentSec != null && (
           <span className="text-xs text-muted-foreground">
@@ -146,12 +142,12 @@ function QuestionReview({
           let choiceStyle = 'border-border bg-card'
           if (choice.isCorrect && wasSelected) {
             choiceStyle =
-              'border-green-500 bg-green-50 dark:bg-green-950'
+              'border-success/30 bg-success-muted'
           } else if (choice.isCorrect && !wasSelected) {
             choiceStyle =
-              'border-green-300 bg-green-50/50 dark:border-green-700 dark:bg-green-950/50'
+              'border-success/30 bg-success-muted/50'
           } else if (!choice.isCorrect && wasSelected) {
-            choiceStyle = 'border-red-500 bg-red-50 dark:bg-red-950'
+            choiceStyle = 'border-danger/30 bg-danger-muted'
           }
 
           return (
@@ -163,7 +159,7 @@ function QuestionReview({
                   {choice.isCorrect && (
                     <svg
                       aria-hidden="true"
-                      className="h-4 w-4 text-green-600 dark:text-green-400"
+                      className="h-4 w-4 text-success"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -179,7 +175,7 @@ function QuestionReview({
                   {!choice.isCorrect && wasSelected && (
                     <svg
                       aria-hidden="true"
-                      className="h-4 w-4 text-red-600 dark:text-red-400"
+                      className="h-4 w-4 text-danger"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -203,7 +199,7 @@ function QuestionReview({
                 )}
               </div>
               {choice.explanation && (
-                <div className="ml-6 mt-1 border-l-2 border-muted pl-3 text-sm text-muted-foreground">
+                <div className="ml-6 mt-1 rounded bg-muted/40 px-3 py-1.5 text-sm text-muted-foreground">
                   <MarkdownRenderer content={choice.explanation} />
                 </div>
               )}
@@ -236,28 +232,69 @@ function QuestionReview({
 
 const INITIAL_SHOW = 10
 
+type ReviewFilter = 'all' | 'incorrect'
+
 function QuestionReviewList({ results }: { results: SessionResult['results'] }) {
   const [visibleCount, setVisibleCount] = useState(INITIAL_SHOW)
-  const visible = results.slice(0, visibleCount)
-  const remaining = results.length - visibleCount
+  const [filter, setFilter] = useState<ReviewFilter>('all')
+
+  const filtered = filter === 'all'
+    ? results
+    : results.filter((r) => r.isCorrect === false)
+
+  const visible = filtered.slice(0, visibleCount)
+  const remaining = filtered.length - visibleCount
+
+  const incorrectCount = results.filter((r) => r.isCorrect === false).length
+
+  const filters: { value: ReviewFilter; label: string; count: number }[] = [
+    { value: 'all', label: 'すべて', count: results.length },
+    { value: 'incorrect', label: '不正解のみ', count: incorrectCount },
+  ]
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold">問題の振り返り</h2>
-      {visible.map((questionResult, idx) => (
-        <QuestionReview
-          key={questionResult.questionId}
-          result={questionResult}
-          index={idx}
-        />
-      ))}
-      {remaining > 0 && (
-        <button
-          onClick={() => setVisibleCount((prev) => prev + INITIAL_SHOW)}
-          className="w-full rounded-lg border py-3 text-sm font-medium text-muted-foreground hover:bg-muted"
-        >
-          さらに表示 (残り {remaining} 問)
-        </button>
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">問題の振り返り</h2>
+        <div className="flex gap-1">
+          {filters.map((f) => (
+            <button
+              key={f.value}
+              onClick={() => { setFilter(f.value); setVisibleCount(INITIAL_SHOW) }}
+              disabled={f.count === 0}
+              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-40 ${
+                filter === f.value
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {f.label} ({f.count})
+            </button>
+          ))}
+        </div>
+      </div>
+      {filtered.length === 0 ? (
+        <p className="py-8 text-center text-sm text-muted-foreground">
+          不正解の問題はありません。
+        </p>
+      ) : (
+        <>
+          {visible.map((questionResult) => (
+            <QuestionReview
+              key={questionResult.questionId}
+              result={questionResult}
+              index={results.indexOf(questionResult)}
+            />
+          ))}
+          {remaining > 0 && (
+            <button
+              onClick={() => setVisibleCount((prev) => prev + INITIAL_SHOW)}
+              className="w-full rounded-lg border py-3 text-sm font-medium text-muted-foreground hover:bg-muted"
+            >
+              さらに表示 (残り {remaining} 問)
+            </button>
+          )}
+        </>
       )}
     </div>
   )
@@ -301,7 +338,7 @@ export default function ExamResultPage() {
       <div className="flex h-64 items-center justify-center">
         <div className="text-center">
           <div className="mx-auto mb-4 flex justify-center">
-            <LoadingSpinner label="結果を読み込み中\u2026" />
+            <LoadingSpinner label="結果を読み込み中…" />
           </div>
         </div>
       </div>
@@ -364,10 +401,10 @@ export default function ExamResultPage() {
       <ScoreSummary result={result} />
 
       <div className="flex gap-4 text-sm">
-        <span className="rounded-full bg-green-100 px-3 py-1 text-green-700 dark:bg-green-900 dark:text-green-300">
+        <span className="rounded-full bg-success-muted px-3 py-1 text-success-foreground motion-safe:motion-preset-slide-up motion-safe:motion-duration-300" style={{ animationDelay: '700ms' }}>
           正解: {correctCount}
         </span>
-        <span className="rounded-full bg-red-100 px-3 py-1 text-red-700 dark:bg-red-900 dark:text-red-300">
+        <span className="rounded-full bg-danger-muted px-3 py-1 text-danger-foreground motion-safe:motion-preset-slide-up motion-safe:motion-duration-300" style={{ animationDelay: '800ms' }}>
           不正解: {incorrectCount}
         </span>
       </div>

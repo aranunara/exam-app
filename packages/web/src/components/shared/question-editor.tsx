@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { MarkdownRenderer } from '@/components/shared/markdown-renderer'
 import { Collapsible } from '@/components/shared/collapsible'
 import { ToggleSwitch } from '@/components/shared/toggle-switch'
+import { ConfidenceSelector, ConfidenceBadge } from '@/components/shared/confidence-selector'
+import type { ConfidenceLevel } from '@/lib/confidence-config'
 import { cn } from '@/lib/utils'
 import type { Tag } from '@/types'
 
@@ -69,7 +71,7 @@ function ChoiceEditor({
             className={cn(
               'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium transition-all',
               choice.isCorrect
-                ? 'bg-green-100 text-green-700 ring-1 ring-green-400/50 dark:bg-green-900/50 dark:text-green-300 dark:ring-green-600/50'
+                ? 'bg-success-muted text-success-foreground ring-1 ring-success/30'
                 : 'bg-muted text-muted-foreground hover:bg-muted/80',
             )}
           >
@@ -140,12 +142,12 @@ export function QuestionEditor({
   onMoveUp,
   onMoveDown,
   onSave,
-  isSaving,
-  saveLabel,
-  isDirty,
+  saveStatus,
   isOpen,
   onOpenChange,
   collapsedSummary,
+  confidenceLevel,
+  onConfidenceChange,
 }: {
   question: QuestionFormData
   index: number
@@ -156,12 +158,12 @@ export function QuestionEditor({
   onMoveUp: () => void
   onMoveDown: () => void
   onSave?: () => void
-  isSaving?: boolean
-  saveLabel?: string
-  isDirty?: boolean
+  saveStatus?: 'idle' | 'saving' | 'saved' | 'error'
   isOpen?: boolean
   onOpenChange?: (open: boolean) => void
   collapsedSummary?: string
+  confidenceLevel?: ConfidenceLevel
+  onConfidenceChange?: (level: ConfidenceLevel) => void
 }) {
   const [showPreview, setShowPreview] = useState(false)
 
@@ -203,11 +205,28 @@ export function QuestionEditor({
   const header = (
     <span className="flex items-center gap-2">
       問題 {index + 1}
-      {isDirty && (
-        <span
-          className="inline-block h-2 w-2 rounded-full bg-yellow-500"
-          title="未保存の変更があります"
-        />
+      {saveStatus === 'saving' && (
+        <span className="text-xs font-normal text-muted-foreground animate-pulse">
+          保存中...
+        </span>
+      )}
+      {saveStatus === 'saved' && (
+        <span className="flex items-center gap-1 text-xs font-normal text-success-foreground">
+          <svg aria-hidden="true" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+          保存済み
+        </span>
+      )}
+      {saveStatus === 'error' && (
+        <span className="flex items-center gap-1 text-xs font-normal text-destructive">
+          保存失敗
+          {onSave && (
+            <button type="button" onClick={onSave} className="ml-1 underline hover:no-underline">
+              再試行
+            </button>
+          )}
+        </span>
       )}
     </span>
   )
@@ -244,9 +263,46 @@ export function QuestionEditor({
 
   const body = (
     <div className="space-y-4">
+      <div className="flex items-center gap-2 sm:hidden">
+        <button
+          type="button"
+          disabled={index === 0}
+          onClick={onMoveUp}
+          className="inline-flex h-10 items-center gap-1 rounded border px-3 text-xs transition-colors hover:bg-muted disabled:opacity-30"
+          title="上へ移動"
+        >
+          &#9650; 上へ
+        </button>
+        <button
+          type="button"
+          disabled={index === totalQuestions - 1}
+          onClick={onMoveDown}
+          className="inline-flex h-10 items-center gap-1 rounded border px-3 text-xs transition-colors hover:bg-muted disabled:opacity-30"
+          title="下へ移動"
+        >
+          &#9660; 下へ
+        </button>
+        <span className="flex-1" />
+        <button
+          type="button"
+          onClick={onRemove}
+          className="inline-flex h-10 items-center rounded border border-destructive/50 px-3 text-xs text-destructive transition-colors hover:bg-destructive/10"
+        >
+          削除
+        </button>
+      </div>
+
+      {question.id && confidenceLevel !== undefined && (
+        <ConfidenceSelector
+          questionId={question.id}
+          currentLevel={confidenceLevel}
+          onLevelChange={onConfidenceChange}
+        />
+      )}
+
       <div className="flex items-center gap-4">
         {question.isMultiAnswer && (
-          <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
+          <span className="inline-flex items-center rounded-full bg-info-muted px-2.5 py-0.5 text-xs font-medium text-info-foreground">
             複数回答（正解が2つ以上）
           </span>
         )}
@@ -352,27 +408,21 @@ export function QuestionEditor({
         </div>
       </div>
 
-      {onSave && isDirty && (
-        <div className="flex justify-end pt-2">
-          <button
-            type="button"
-            onClick={onSave}
-            disabled={isSaving}
-            className="rounded-md border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-50"
-          >
-            {isSaving
-              ? '保存中...'
-              : saveLabel ?? (question.id ? '問題を更新' : '問題を保存')}
-          </button>
-        </div>
-      )}
     </div>
   )
 
   if (collapsible) {
-    const collapsedBadge = !isOpen && summary ? (
-      <span className="truncate text-sm font-normal text-muted-foreground">
-        {summary}
+    const hasConfidence = confidenceLevel != null && confidenceLevel > 0
+    const collapsedBadge = !isOpen && (summary || hasConfidence) ? (
+      <span className="flex min-w-0 items-center gap-2">
+        {hasConfidence && (
+          <span className="shrink-0"><ConfidenceBadge level={confidenceLevel} /></span>
+        )}
+        {summary && (
+          <span className="min-w-0 truncate text-sm font-normal text-muted-foreground">
+            {summary}
+          </span>
+        )}
       </span>
     ) : undefined
 
