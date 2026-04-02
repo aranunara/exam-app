@@ -15,6 +15,20 @@
       "when": 1773495385972,
       "tag": "0001_red_barracuda",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1775052618911,
+      "tag": "0002_gray_monster_badoon",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1775131150705,
+      "tag": "0003_living_iron_man",
+      "breakpoints": true
     }
   ]
 }
