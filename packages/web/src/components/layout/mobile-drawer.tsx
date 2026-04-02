@@ -19,7 +19,7 @@ export const MobileDrawer = forwardRef<HTMLDivElement, MobileDrawerProps>(
       <>
         <div
           className={cn(
-            'fixed inset-0 z-40 bg-black/50 transition-opacity duration-300 md:hidden',
+            'fixed inset-0 z-40 bg-black/50 motion-safe:transition-opacity motion-safe:duration-300 md:hidden',
             isOpen ? 'opacity-100' : 'pointer-events-none opacity-0',
           )}
           onClick={onClose}
@@ -33,7 +33,7 @@ export const MobileDrawer = forwardRef<HTMLDivElement, MobileDrawerProps>(
           aria-modal="true"
           aria-label="ナビゲーションメニュー"
           className={cn(
-            'fixed inset-y-0 right-0 z-50 w-72 bg-background shadow-xl transition-transform duration-300 md:hidden',
+            'fixed inset-y-0 right-0 z-50 w-72 bg-background shadow-xl motion-safe:transition-transform motion-safe:duration-400 ease-[var(--ease-spring)] md:hidden',
             isOpen ? 'translate-x-0' : 'translate-x-full',
           )}
         >

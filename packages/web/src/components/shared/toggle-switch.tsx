@@ -39,7 +39,7 @@ export function ToggleSwitch({
     >
       <span
         className={cn(
-          'pointer-events-none inline-block rounded-full bg-white shadow-sm ring-0 motion-safe:transition-transform motion-safe:duration-200',
+          'pointer-events-none inline-block rounded-full bg-white shadow-sm ring-0 motion-safe:transition-transform motion-safe:duration-300 ease-[var(--ease-spring-bouncy)]',
           thumbSize,
           thumbTranslate,
         )}

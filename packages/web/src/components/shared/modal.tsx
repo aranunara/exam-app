@@ -14,7 +14,7 @@ export function Modal({ isOpen, onClose, title, children, modalRef }: ModalProps
     <>
       <div
         className={cn(
-          'fixed inset-0 z-40 bg-black/50 transition-opacity duration-300',
+          'fixed inset-0 z-40 bg-black/50 motion-safe:transition-opacity motion-safe:duration-300',
           isOpen ? 'opacity-100' : 'pointer-events-none opacity-0',
         )}
         onClick={onClose}
@@ -23,7 +23,7 @@ export function Modal({ isOpen, onClose, title, children, modalRef }: ModalProps
 
       <div
         className={cn(
-          'fixed inset-0 z-50 flex items-center justify-center p-4 transition-all duration-300',
+          'fixed inset-0 z-50 flex items-center justify-center p-4 motion-safe:transition-[opacity,transform] motion-safe:duration-350 ease-[var(--ease-spring-bouncy)]',
           isOpen
             ? 'opacity-100'
             : 'pointer-events-none opacity-0 scale-95',

@@ -31,7 +31,7 @@ export function Collapsible({
         <svg
           aria-hidden="true"
           className={cn(
-            'h-4 w-4 shrink-0 text-muted-foreground motion-safe:transition-transform motion-safe:duration-200',
+            'h-4 w-4 shrink-0 text-muted-foreground motion-safe:transition-transform motion-safe:duration-300 ease-[var(--ease-spring-bouncy)]',
             open && 'rotate-90',
           )}
           fill="none"
@@ -61,7 +61,7 @@ export function Collapsible({
         )}
       </button>
       <div
-        className="grid motion-safe:transition-[grid-template-rows] motion-safe:duration-200 ease-in-out"
+        className="grid motion-safe:transition-[grid-template-rows] motion-safe:duration-350 ease-[var(--ease-spring)]"
         style={{ gridTemplateRows: open ? '1fr' : '0fr' }}
       >
         <div className="overflow-hidden">
