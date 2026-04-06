@@ -1,7 +1,18 @@
 import { Hono } from 'hono'
-import { eq, and } from 'drizzle-orm'
+import { eq, and, inArray } from 'drizzle-orm'
 import type { Env } from '../../types'
-import { subjects } from '../../db/schema'
+import {
+  subjects,
+  workbooks,
+  workbookTags,
+  questions,
+  questionTags,
+  choices,
+  questionConfidence,
+  examSessions,
+  sessionAnswers,
+  sessionAnswerChoices,
+} from '../../db/schema'
 import {
   createSubjectSchema,
   updateSubjectSchema,
@@ -72,6 +83,71 @@ app.delete('/:id', async (c) => {
   const id = c.req.param('id')
 
   await getSubjectForUser(db, id, userId)
+
+  const relatedWorkbooks = await db
+    .select({ id: workbooks.id })
+    .from(workbooks)
+    .where(and(eq(workbooks.subjectId, id), eq(workbooks.userId, userId)))
+
+  if (relatedWorkbooks.length > 0) {
+    const workbookIds = relatedWorkbooks.map((wb) => wb.id)
+
+    const relatedQuestions = await db
+      .select({ id: questions.id })
+      .from(questions)
+      .where(inArray(questions.workbookId, workbookIds))
+
+    if (relatedQuestions.length > 0) {
+      const questionIds = relatedQuestions.map((q) => q.id)
+
+      const relatedSessions = await db
+        .select({ id: examSessions.id })
+        .from(examSessions)
+        .where(inArray(examSessions.workbookId, workbookIds))
+
+      if (relatedSessions.length > 0) {
+        const sessionIds = relatedSessions.map((s) => s.id)
+        const relatedAnswers = await db
+          .select({ id: sessionAnswers.id })
+          .from(sessionAnswers)
+          .where(inArray(sessionAnswers.sessionId, sessionIds))
+
+        if (relatedAnswers.length > 0) {
+          const answerIds = relatedAnswers.map((a) => a.id)
+          await db
+            .delete(sessionAnswerChoices)
+            .where(inArray(sessionAnswerChoices.sessionAnswerId, answerIds))
+        }
+
+        await db
+          .delete(sessionAnswers)
+          .where(inArray(sessionAnswers.sessionId, sessionIds))
+        await db
+          .delete(examSessions)
+          .where(inArray(examSessions.workbookId, workbookIds))
+      }
+
+      await db
+        .delete(questionConfidence)
+        .where(inArray(questionConfidence.questionId, questionIds))
+      await db
+        .delete(choices)
+        .where(inArray(choices.questionId, questionIds))
+      await db
+        .delete(questionTags)
+        .where(inArray(questionTags.questionId, questionIds))
+      await db
+        .delete(questions)
+        .where(inArray(questions.workbookId, workbookIds))
+    }
+
+    await db
+      .delete(workbookTags)
+      .where(inArray(workbookTags.workbookId, workbookIds))
+    await db
+      .delete(workbooks)
+      .where(inArray(workbooks.id, workbookIds))
+  }
 
   await db
     .delete(subjects)

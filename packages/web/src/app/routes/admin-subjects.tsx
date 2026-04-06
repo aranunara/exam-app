@@ -348,6 +348,7 @@ export default function AdminSubjectsPage() {
     mutationFn: (id: string) => api.delete<ApiResponse<null>>(`/subjects/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.subjects.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.workbooks.all })
       setDeletingId(null)
       setMutationError(null)
     },

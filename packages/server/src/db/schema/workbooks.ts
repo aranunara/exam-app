@@ -15,7 +15,7 @@ export const workbooks = sqliteTable(
     userId: text('user_id').notNull(),
     subjectId: text('category_id')
       .notNull()
-      .references(() => subjects.id),
+      .references(() => subjects.id, { onDelete: 'cascade' }),
     title: text('title').notNull(),
     description: text('description'),
     timeLimit: integer('time_limit'),
