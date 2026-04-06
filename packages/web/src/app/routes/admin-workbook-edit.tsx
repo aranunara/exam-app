@@ -254,7 +254,7 @@ export default function AdminWorkbookEditPage() {
     description: '',
     subjectId: isNew ? (searchParams.get('subjectId') ?? '') : '',
     timeLimit: '',
-    isPublished: false,
+    isPublished: true,
     tagIds: [],
   })
   const [questions, setQuestions] = useState<QuestionFormData[]>([])

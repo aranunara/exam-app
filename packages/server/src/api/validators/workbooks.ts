@@ -31,7 +31,7 @@ export const createWorkbookSchema = z.object({
   title: z.string().min(1).max(500),
   description: z.string().max(2000).nullable().optional(),
   timeLimit: z.number().int().min(0).nullable().optional(),
-  isPublished: z.boolean().default(false),
+  isPublished: z.boolean().default(true),
   tagIds: z.array(z.string()).optional(),
   questions: z.array(questionSchema).optional(),
 })
