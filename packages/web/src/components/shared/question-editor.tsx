@@ -40,7 +40,12 @@ export function createEmptyQuestion(sortOrder: number): QuestionFormData {
     explanation: '',
     isMultiAnswer: false,
     sortOrder,
-    choices: [createEmptyChoice(0), createEmptyChoice(1)],
+    choices: [
+      createEmptyChoice(0),
+      createEmptyChoice(1),
+      createEmptyChoice(2),
+      createEmptyChoice(3),
+    ],
     tagIds: [],
   }
 }
