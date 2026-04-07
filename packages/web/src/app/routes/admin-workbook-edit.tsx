@@ -447,9 +447,10 @@ export default function AdminWorkbookEditPage() {
 
   function isQuestionValid(question: QuestionFormData): boolean {
     if (!question.body.trim()) return false
-    if (question.choices.some((c) => !c.body.trim())) return false
-    if (!question.choices.some((c) => c.isCorrect)) return false
-    if (question.choices.every((c) => c.isCorrect)) return false
+    const filledChoices = question.choices.filter((c) => c.body.trim())
+    if (filledChoices.length < 2) return false
+    if (!filledChoices.some((c) => c.isCorrect)) return false
+    if (filledChoices.every((c) => c.isCorrect)) return false
     return true
   }
 
@@ -470,18 +471,19 @@ export default function AdminWorkbookEditPage() {
 
       dispatch({ type: 'SET_SAVE_STATUS', index, status: 'saving' })
 
+      const filledChoices = question.choices.filter((c) => c.body.trim())
       const payload = {
         body: question.body,
         explanation: question.explanation || null,
         isMultiAnswer: question.isMultiAnswer,
         sortOrder: question.sortOrder,
         tagIds: question.tagIds,
-        choices: question.choices.map((c) => ({
+        choices: filledChoices.map((c, i) => ({
           ...(c.id ? { id: c.id } : {}),
           body: c.body,
           isCorrect: c.isCorrect,
           explanation: c.explanation || null,
-          sortOrder: c.sortOrder,
+          sortOrder: i,
         })),
       }
 
@@ -612,21 +614,22 @@ export default function AdminWorkbookEditPage() {
       })
       return
     }
-    if (question.choices.some((c) => !c.body.trim())) {
+    const filledChoices = question.choices.filter((c) => c.body.trim())
+    if (filledChoices.length < 2) {
       showToast({
         type: 'error',
-        message: `問題 ${index + 1}: 空の選択肢があります`,
+        message: `問題 ${index + 1}: 選択肢を2つ以上入力してください`,
       })
       return
     }
-    if (!question.choices.some((c) => c.isCorrect)) {
+    if (!filledChoices.some((c) => c.isCorrect)) {
       showToast({
         type: 'error',
         message: `問題 ${index + 1}: 正解の選択肢を1つ以上チェックしてください`,
       })
       return
     }
-    if (question.choices.every((c) => c.isCorrect)) {
+    if (filledChoices.every((c) => c.isCorrect)) {
       showToast({
         type: 'error',
         message: `問題 ${index + 1}: すべての選択肢を正解にすることはできません`,
@@ -640,12 +643,12 @@ export default function AdminWorkbookEditPage() {
       isMultiAnswer: question.isMultiAnswer,
       sortOrder: question.sortOrder,
       tagIds: question.tagIds,
-      choices: question.choices.map((c) => ({
+      choices: filledChoices.map((c, i) => ({
         ...(c.id ? { id: c.id } : {}),
         body: c.body,
         isCorrect: c.isCorrect,
         explanation: c.explanation || null,
-        sortOrder: c.sortOrder,
+        sortOrder: i,
       })),
     }
 
