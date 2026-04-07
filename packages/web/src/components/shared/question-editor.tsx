@@ -117,15 +117,15 @@ function ChoiceEditor({
         rows={2}
         className="mb-2 w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       />
-      <input
-        type="text"
+      <textarea
         value={choice.explanation}
         onChange={(e) =>
           onChange({ ...choice, explanation: e.target.value })
         }
-        placeholder="解説（任意）"
+        placeholder="解説（任意・Markdown対応）"
         aria-label={`選択肢 ${index + 1} の解説`}
-        className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        rows={1}
+        className="w-full resize-y rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       />
     </div>
   )
@@ -411,6 +411,40 @@ export function QuestionEditor({
             />
           ))}
         </div>
+        {showPreview && question.choices.some((c) => c.body.trim()) && (
+          <div className="mt-3 rounded-md border bg-muted/30 p-3">
+            <p className="mb-2 text-xs font-medium text-muted-foreground">
+              選択肢プレビュー
+            </p>
+            <div className="space-y-2">
+              {question.choices.map((choice, ci) => (
+                choice.body.trim() && (
+                  <div key={ci} className="rounded-md border bg-background p-3">
+                    <div className="flex items-start gap-2">
+                      <span className={cn(
+                        'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-medium',
+                        choice.isCorrect
+                          ? 'bg-success-muted text-success-foreground ring-1 ring-success/30'
+                          : 'bg-muted text-muted-foreground',
+                      )}>
+                        {String.fromCharCode(65 + ci)}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <MarkdownRenderer content={choice.body} />
+                        {choice.explanation.trim() && (
+                          <div className="mt-2 border-t pt-2">
+                            <p className="mb-0.5 text-xs font-medium text-muted-foreground">解説</p>
+                            <MarkdownRenderer content={choice.explanation} />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
     </div>
