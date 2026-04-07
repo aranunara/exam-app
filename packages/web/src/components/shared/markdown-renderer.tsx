@@ -74,7 +74,7 @@ const markdownComponents: Components = {
     }
 
     return (
-      <pre className="overflow-x-auto rounded-lg bg-muted p-4 text-foreground" {...props}>
+      <pre className="overflow-x-auto rounded-lg bg-muted p-4 text-foreground [&>code]:bg-transparent [&>code]:p-0 [&>code]:rounded-none" {...props}>
         {children}
       </pre>
     )
