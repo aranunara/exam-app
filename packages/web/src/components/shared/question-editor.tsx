@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { MarkdownRenderer } from '@/components/shared/markdown-renderer'
+import { useMarkdownShortcuts } from '@/hooks/use-markdown-shortcuts'
 import { Collapsible } from '@/components/shared/collapsible'
 import { ToggleSwitch } from '@/components/shared/toggle-switch'
 import { ConfidenceSelector, ConfidenceBadge } from '@/components/shared/confidence-selector'
@@ -63,6 +64,13 @@ function ChoiceEditor({
   onRemove: () => void
   canRemove: boolean
 }) {
+  const handleBodyShortcut = useMarkdownShortcuts(
+    useCallback((v: string) => onChange({ ...choice, body: v }), [onChange, choice]),
+  )
+  const handleExplanationShortcut = useMarkdownShortcuts(
+    useCallback((v: string) => onChange({ ...choice, explanation: v }), [onChange, choice]),
+  )
+
   return (
     <div className="rounded-md border bg-muted/20 p-3">
       <div className="mb-2 flex items-center justify-between">
@@ -112,6 +120,7 @@ function ChoiceEditor({
       <textarea
         value={choice.body}
         onChange={(e) => onChange({ ...choice, body: e.target.value })}
+        onKeyDown={handleBodyShortcut}
         placeholder="選択肢のテキスト（Markdown対応）"
         aria-label={`選択肢 ${index + 1} のテキスト`}
         rows={2}
@@ -122,6 +131,7 @@ function ChoiceEditor({
         onChange={(e) =>
           onChange({ ...choice, explanation: e.target.value })
         }
+        onKeyDown={handleExplanationShortcut}
         placeholder="解説（任意・Markdown対応）"
         aria-label={`選択肢 ${index + 1} の解説`}
         rows={1}
@@ -171,6 +181,15 @@ export function QuestionEditor({
   onConfidenceChange?: (level: ConfidenceLevel) => void
 }) {
   const [showPreview, setShowPreview] = useState(false)
+  const filledChoices = question.choices.filter((c) => c.body.trim())
+  const missingCorrect = filledChoices.length > 0 && !filledChoices.some((c) => c.isCorrect)
+
+  const handleBodyShortcut = useMarkdownShortcuts(
+    useCallback((v: string) => onChange({ ...question, body: v }), [onChange, question]),
+  )
+  const handleExplanationShortcut = useMarkdownShortcuts(
+    useCallback((v: string) => onChange({ ...question, explanation: v }), [onChange, question]),
+  )
 
   function handleChoiceChange(choiceIndex: number, updated: ChoiceFormData) {
     const newChoices = question.choices.map((c, i) =>
@@ -210,6 +229,11 @@ export function QuestionEditor({
   const header = (
     <span className="flex items-center gap-2">
       問題 {index + 1}
+      {missingCorrect && (
+        <span className="text-xs font-normal text-warning-foreground" title="正解の選択肢が設定されていません">
+          正解未設定
+        </span>
+      )}
       {saveStatus === 'saving' && (
         <span className="text-xs font-normal text-muted-foreground animate-pulse">
           保存中...
@@ -328,6 +352,7 @@ export function QuestionEditor({
           onChange={(e) =>
             onChange({ ...question, body: e.target.value })
           }
+          onKeyDown={handleBodyShortcut}
           placeholder="問題文（Markdown対応）"
           rows={4}
           className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -349,6 +374,7 @@ export function QuestionEditor({
           onChange={(e) =>
             onChange({ ...question, explanation: e.target.value })
           }
+          onKeyDown={handleExplanationShortcut}
           placeholder="回答後に表示される解説（Markdown対応）"
           rows={2}
           className="w-full rounded-md border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -411,6 +437,11 @@ export function QuestionEditor({
             />
           ))}
         </div>
+        {missingCorrect && (
+          <p className="mt-2 text-xs text-warning-foreground">
+            正解の選択肢が設定されていません
+          </p>
+        )}
         {showPreview && question.choices.some((c) => c.body.trim()) && (
           <div className="mt-3 rounded-md border bg-muted/30 p-3">
             <p className="mb-2 text-xs font-medium text-muted-foreground">
