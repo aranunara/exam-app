@@ -8,6 +8,7 @@ import { MarkdownRenderer } from '@/components/shared/markdown-renderer'
 import { LoadingSpinner } from '@/components/shared/loading-spinner'
 import { ConfidenceSelector } from '@/components/shared/confidence-selector'
 import { AnimatedNumber } from '@/components/shared/animated-number'
+import { ChoiceTips } from '@/components/shared/choice-tips'
 
 function ScoreSummary({
   result,
@@ -199,9 +200,7 @@ function QuestionReview({
                 )}
               </div>
               {choice.explanation && (
-                <div className="ml-6 mt-1 rounded bg-muted/40 px-3 py-1.5 text-sm text-muted-foreground">
-                  <MarkdownRenderer content={choice.explanation} />
-                </div>
+                <ChoiceTips explanation={choice.explanation} className="ml-6" />
               )}
             </div>
           )

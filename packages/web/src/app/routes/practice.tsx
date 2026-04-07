@@ -17,6 +17,7 @@ import type { ApiResponse, SessionQuestion, AnswerFeedback, ConfidenceLevel, Fil
 import { MarkdownRenderer } from '@/components/shared/markdown-renderer'
 import { LoadingSpinner } from '@/components/shared/loading-spinner'
 import { ConfidenceSelector } from '@/components/shared/confidence-selector'
+import { ChoiceTips } from '@/components/shared/choice-tips'
 import { confidenceLevels } from '@/lib/confidence-config'
 import { MobileQuestionNav } from '@/components/shared/mobile-question-nav'
 
@@ -674,9 +675,7 @@ export default function PracticePage() {
                       )}
                     </button>
                     {feedback && feedbackChoice?.explanation && (
-                      <div className="ml-9 mt-1 rounded bg-muted/40 px-3 py-1.5 text-sm text-muted-foreground">
-                        <MarkdownRenderer content={feedbackChoice.explanation} />
-                      </div>
+                      <ChoiceTips explanation={feedbackChoice.explanation} />
                     )}
                   </div>
                 )
