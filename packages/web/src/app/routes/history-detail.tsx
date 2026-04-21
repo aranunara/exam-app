@@ -7,6 +7,7 @@ import { formatScore, formatDate, formatDuration } from '@/lib/format'
 import { ErrorMessage } from '@/components/shared/error-message'
 import { MarkdownRenderer } from '@/components/shared/markdown-renderer'
 import { ConfidenceSelector } from '@/components/shared/confidence-selector'
+import { ChoiceTips } from '@/components/shared/choice-tips'
 import type { ApiResponse, SessionResult, ConfidenceLevel } from '@/types'
 
 function SessionSummary({
@@ -54,6 +55,17 @@ function SessionSummary({
   )
 }
 
+function plainTextPreview(markdown: string, maxLength = 80): string {
+  const plain = markdown
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`[^`]*`/g, ' ')
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/[#>*_~\-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return plain.length > maxLength ? `${plain.slice(0, maxLength)}…` : plain
+}
+
 function QuestionReview({
   item,
   index,
@@ -62,122 +74,148 @@ function QuestionReview({
   index: number
 }) {
   const isCorrect = item.isCorrect === true
+  const [isExpanded, setIsExpanded] = useState(false)
   const [confidenceLevel, setConfidenceLevel] = useState<ConfidenceLevel>(
     (item.confidenceLevel ?? 0) as ConfidenceLevel,
   )
 
+  const preview = plainTextPreview(item.body)
+
   return (
     <div
-      className={`rounded-lg border p-6 ${
+      className={`rounded-lg border ${
         isCorrect
           ? 'border-success/30'
           : 'border-danger/30'
       }`}
     >
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-medium text-muted-foreground">
-            問題 {index + 1}
-          </span>
-          {item.isMultiAnswer && (
-            <span className="rounded-full bg-info-muted px-2 py-0.5 text-xs font-medium text-info-foreground">
-              複数回答
+      <button
+        type="button"
+        onClick={() => setIsExpanded((prev) => !prev)}
+        aria-expanded={isExpanded}
+        aria-controls={`history-question-details-${item.questionId}`}
+        className="flex w-full items-start gap-3 rounded-lg p-4 text-left transition-colors hover:bg-muted/40 active:scale-[0.997] motion-safe:transition-[background-color,transform] motion-safe:duration-150"
+      >
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium text-muted-foreground">
+              問題 {index + 1}
             </span>
-          )}
-        </div>
-        <span
-          className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-            isCorrect
-              ? 'bg-success-muted text-success-foreground'
-              : 'bg-danger-muted text-danger-foreground'
-          }`}
-        >
-          {isCorrect ? '正解' : '不正解'}
-        </span>
-      </div>
-
-      <div className="mb-4">
-        <MarkdownRenderer content={item.body} />
-      </div>
-
-      <div className="space-y-2">
-        {item.choices.map((choice) => {
-          const wasSelected = item.selectedChoiceIds.includes(choice.id)
-          const isChoiceCorrect = choice.isCorrect
-
-          let choiceStyle = 'border bg-card'
-          if (wasSelected && isChoiceCorrect) {
-            choiceStyle =
-              'border-success/30 bg-success-muted'
-          } else if (wasSelected && !isChoiceCorrect) {
-            choiceStyle =
-              'border-danger/30 bg-danger-muted'
-          } else if (isChoiceCorrect) {
-            choiceStyle =
-              'border-success/30 bg-success-muted'
-          }
-
-          return (
-            <div
-              key={choice.id}
-              className={`rounded-md p-3 ${choiceStyle}`}
+            <span
+              className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                isCorrect
+                  ? 'bg-success-muted text-success-foreground'
+                  : 'bg-danger-muted text-danger-foreground'
+              }`}
             >
-              <div className="flex items-start gap-2">
-                <span className="mt-0.5 flex-shrink-0">
-                  {wasSelected && isChoiceCorrect && (
-                    <span className="text-success">
-                      &#10003;
-                    </span>
-                  )}
-                  {wasSelected && !isChoiceCorrect && (
-                    <span className="text-danger">
-                      &#10007;
-                    </span>
-                  )}
-                  {!wasSelected && isChoiceCorrect && (
-                    <span className="text-success">
-                      &#9679;
-                    </span>
-                  )}
-                  {!wasSelected && !isChoiceCorrect && (
-                    <span className="text-muted-foreground">&#9675;</span>
-                  )}
-                </span>
-                <div className="flex-1">
-                  <MarkdownRenderer content={choice.body} />
-                  {choice.explanation && (
-                    <div className="mt-2 rounded bg-muted/50 p-2 text-sm text-muted-foreground">
-                      <MarkdownRenderer content={choice.explanation} />
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )
-        })}
-      </div>
-
-      {item.explanation && (
-        <div className="mt-4 rounded-md border bg-info-muted p-4">
-          <p className="mb-2 text-sm font-semibold text-info-foreground">
-            解説
+              {isCorrect ? '正解' : '不正解'}
+            </span>
+            {item.isMultiAnswer && (
+              <span className="rounded-full bg-info-muted px-2 py-0.5 text-xs font-medium text-info-foreground">
+                複数回答
+              </span>
+            )}
+            {item.timeSpentSec !== null && (
+              <span className="text-xs text-muted-foreground">
+                {formatDuration(item.timeSpentSec)}
+              </span>
+            )}
+          </div>
+          <p className="mt-1 truncate text-sm text-muted-foreground">
+            {preview}
           </p>
-          <MarkdownRenderer content={item.explanation} />
         </div>
-      )}
+        <svg
+          aria-hidden="true"
+          className={`mt-2 h-4 w-4 shrink-0 text-muted-foreground motion-safe:transition-transform motion-safe:duration-200 ease-out ${
+            isExpanded ? 'rotate-90' : ''
+          }`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2.5}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
 
-      {item.timeSpentSec !== null && (
-        <p className="mt-3 text-xs text-muted-foreground">
-          所要時間: {formatDuration(item.timeSpentSec)}
-        </p>
-      )}
+      <div
+        id={`history-question-details-${item.questionId}`}
+        className="grid motion-safe:transition-[grid-template-rows] motion-safe:duration-250 ease-out"
+        style={{ gridTemplateRows: isExpanded ? '1fr' : '0fr' }}
+      >
+        <div className="overflow-hidden">
+          <div className="border-t px-6 pb-6 pt-4">
+            <div className="mb-4">
+              <MarkdownRenderer content={item.body} />
+            </div>
 
-      <div className="mt-4 border-t pt-3">
-        <ConfidenceSelector
-          questionId={item.questionId}
-          currentLevel={confidenceLevel}
-          onLevelChange={setConfidenceLevel}
-        />
+            <div className="space-y-2">
+              {item.choices.map((choice) => {
+                const wasSelected = item.selectedChoiceIds.includes(choice.id)
+                const isChoiceCorrect = choice.isCorrect
+
+                let choiceStyle = 'border bg-card'
+                if (wasSelected && isChoiceCorrect) {
+                  choiceStyle = 'border-success/30 bg-success-muted'
+                } else if (wasSelected && !isChoiceCorrect) {
+                  choiceStyle = 'border-danger/30 bg-danger-muted'
+                } else if (isChoiceCorrect) {
+                  choiceStyle = 'border-success/30 bg-success-muted'
+                }
+
+                return (
+                  <div key={choice.id}>
+                    <div className={`rounded-md p-3 ${choiceStyle}`}>
+                      <div className="flex items-start gap-2">
+                        <span className="mt-0.5 flex-shrink-0">
+                          {wasSelected && isChoiceCorrect && (
+                            <span className="text-success">&#10003;</span>
+                          )}
+                          {wasSelected && !isChoiceCorrect && (
+                            <span className="text-danger">&#10007;</span>
+                          )}
+                          {!wasSelected && isChoiceCorrect && (
+                            <span className="text-success">&#9679;</span>
+                          )}
+                          {!wasSelected && !isChoiceCorrect && (
+                            <span className="text-muted-foreground">&#9675;</span>
+                          )}
+                        </span>
+                        <div className="flex-1">
+                          <MarkdownRenderer content={choice.body} />
+                        </div>
+                      </div>
+                    </div>
+                    {choice.explanation && (
+                      <ChoiceTips
+                        explanation={choice.explanation}
+                        className="ml-6"
+                      />
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            {item.explanation && (
+              <div className="mt-4 rounded-md border bg-info-muted p-4">
+                <p className="mb-2 text-sm font-semibold text-info-foreground">
+                  解説
+                </p>
+                <MarkdownRenderer content={item.explanation} />
+              </div>
+            )}
+
+            <div className="mt-4 border-t pt-3">
+              <ConfidenceSelector
+                questionId={item.questionId}
+                currentLevel={confidenceLevel}
+                onLevelChange={setConfidenceLevel}
+              />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )
