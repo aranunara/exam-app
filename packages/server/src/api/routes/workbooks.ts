@@ -15,6 +15,7 @@ import {
 } from '../validators/workbooks'
 import { generateUlid } from '../../lib/ulid'
 import { now } from '../../lib/timestamp'
+import { chunkedInsert } from '../../lib/chunked-insert'
 import { AppError } from '../middleware/error-handler'
 import {
   getSubjectForUser,
@@ -167,15 +168,15 @@ async function bulkInsertQuestions(
     timestamp,
   )
 
-  if (questionValues.length > 0) {
-    await db.insert(questions).values(questionValues)
-  }
-  if (choiceValues.length > 0) {
-    await db.insert(choices).values(choiceValues)
-  }
-  if (tagValues.length > 0) {
-    await db.insert(questionTags).values(tagValues)
-  }
+  await chunkedInsert(questionValues, 8, (chunk) =>
+    db.insert(questions).values(chunk),
+  )
+  await chunkedInsert(choiceValues, 8, (chunk) =>
+    db.insert(choices).values(chunk),
+  )
+  await chunkedInsert(tagValues, 2, (chunk) =>
+    db.insert(questionTags).values(chunk),
+  )
 }
 
 app.get('/', async (c) => {
@@ -275,11 +276,10 @@ app.post('/', async (c) => {
   await db.insert(workbooks).values(workbook)
 
   if (body.tagIds?.length) {
-    await db.insert(workbookTags).values(
-      body.tagIds.map((tagId) => ({
-        workbookId,
-        tagId,
-      })),
+    await chunkedInsert(
+      body.tagIds.map((tagId) => ({ workbookId, tagId })),
+      2,
+      (chunk) => db.insert(workbookTags).values(chunk),
     )
   }
 
@@ -312,14 +312,11 @@ app.put('/:id', async (c) => {
     await db
       .delete(workbookTags)
       .where(eq(workbookTags.workbookId, id))
-    if (tagIds.length > 0) {
-      await db.insert(workbookTags).values(
-        tagIds.map((tagId) => ({
-          workbookId: id,
-          tagId,
-        })),
-      )
-    }
+    await chunkedInsert(
+      tagIds.map((tagId) => ({ workbookId: id, tagId })),
+      2,
+      (chunk) => db.insert(workbookTags).values(chunk),
+    )
   }
 
   return c.json({ success: true, data: { ...existing, ...updateData } })
@@ -388,11 +385,10 @@ app.post('/import', async (c) => {
   })
 
   if (body.tagIds?.length) {
-    await db.insert(workbookTags).values(
-      body.tagIds.map((tagId) => ({
-        workbookId,
-        tagId,
-      })),
+    await chunkedInsert(
+      body.tagIds.map((tagId) => ({ workbookId, tagId })),
+      2,
+      (chunk) => db.insert(workbookTags).values(chunk),
     )
   }
 

@@ -9,6 +9,7 @@ import {
 } from '../validators/questions'
 import { generateUlid } from '../../lib/ulid'
 import { now } from '../../lib/timestamp'
+import { chunkedInsert } from '../../lib/chunked-insert'
 import { AppError } from '../middleware/error-handler'
 import { getWorkbookForUser } from '../helpers/ownership'
 
@@ -47,11 +48,10 @@ app.post('/:setId/questions', async (c) => {
     if (userTags.length !== body.tagIds.length) {
       throw new AppError('One or more tags not found', 404)
     }
-    await db.insert(questionTags).values(
-      body.tagIds.map((tagId) => ({
-        questionId,
-        tagId,
-      })),
+    await chunkedInsert(
+      body.tagIds.map((tagId) => ({ questionId, tagId })),
+      2,
+      (chunk) => db.insert(questionTags).values(chunk),
     )
   }
 
@@ -65,7 +65,9 @@ app.post('/:setId/questions', async (c) => {
     createdAt: timestamp,
     updatedAt: timestamp,
   }))
-  await db.insert(choices).values(createdChoices)
+  await chunkedInsert(createdChoices, 8, (chunk) =>
+    db.insert(choices).values(chunk),
+  )
 
   return c.json(
     { success: true, data: { ...question, choices: createdChoices } },
@@ -116,32 +118,28 @@ app.put('/:setId/questions/:id', async (c) => {
       }
     }
     await db.delete(questionTags).where(eq(questionTags.questionId, id))
-    if (tagIds.length > 0) {
-      await db.insert(questionTags).values(
-        tagIds.map((tagId) => ({
-          questionId: id,
-          tagId,
-        })),
-      )
-    }
+    await chunkedInsert(
+      tagIds.map((tagId) => ({ questionId: id, tagId })),
+      2,
+      (chunk) => db.insert(questionTags).values(chunk),
+    )
   }
 
   if (newChoices !== undefined) {
     await db.delete(choices).where(eq(choices.questionId, id))
-    if (newChoices.length > 0) {
-      await db.insert(choices).values(
-        newChoices.map((ch) => ({
-          id: generateUlid(),
-          questionId: id,
-          body: ch.body,
-          isCorrect: ch.isCorrect,
-          explanation: ch.explanation,
-          sortOrder: ch.sortOrder,
-          createdAt: timestamp,
-          updatedAt: timestamp,
-        })),
-      )
-    }
+    const newChoiceValues = newChoices.map((ch) => ({
+      id: generateUlid(),
+      questionId: id,
+      body: ch.body,
+      isCorrect: ch.isCorrect,
+      explanation: ch.explanation,
+      sortOrder: ch.sortOrder,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    }))
+    await chunkedInsert(newChoiceValues, 8, (chunk) =>
+      db.insert(choices).values(chunk),
+    )
   }
 
   return c.json({ success: true })

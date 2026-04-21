@@ -20,6 +20,7 @@ import { generateUlid } from '../../lib/ulid'
 import { now } from '../../lib/timestamp'
 import { shuffleArray } from '../../lib/shuffle'
 import { calculateScorePercent } from '../../lib/scoring'
+import { chunkedInsert } from '../../lib/chunked-insert'
 import { AppError } from '../middleware/error-handler'
 import { getSessionForUser } from '../helpers/ownership'
 
@@ -144,7 +145,9 @@ app.post('/', async (c) => {
     }
   })
 
-  await db.insert(sessionAnswers).values(sessionAnswerValues)
+  await chunkedInsert(sessionAnswerValues, 6, (chunk) =>
+    db.insert(sessionAnswers).values(chunk),
+  )
 
   return c.json(
     {

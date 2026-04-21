@@ -25,6 +25,15 @@ export const errorHandler: ErrorHandler<Env> = (err, c) => {
     )
   }
 
+  const cause = (err as { cause?: unknown }).cause
+  console.error('Unhandled error:', {
+    message: err.message,
+    name: err.name,
+    stack: err.stack,
+    cause,
+    causeMessage: cause instanceof Error ? cause.message : undefined,
+    causeStack: cause instanceof Error ? cause.stack : undefined,
+  })
   return c.json({ success: false, error: 'Internal server error' }, 500)
 }
 
