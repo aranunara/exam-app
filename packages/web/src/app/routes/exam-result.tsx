@@ -84,6 +84,17 @@ function ScoreSummary({
   )
 }
 
+function plainTextPreview(markdown: string, maxLength = 80): string {
+  const plain = markdown
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`[^`]*`/g, ' ')
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/[#>*_~\-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return plain.length > maxLength ? `${plain.slice(0, maxLength)}…` : plain
+}
+
 function QuestionReview({
   result,
   index,
@@ -92,138 +103,177 @@ function QuestionReview({
   index: number
 }) {
   const isCorrect = result.isCorrect === true
+  const [isExpanded, setIsExpanded] = useState(false)
   const [confidenceLevel, setConfidenceLevel] = useState<ConfidenceLevel>(
     (result.confidenceLevel ?? 0) as ConfidenceLevel,
   )
 
+  const preview = plainTextPreview(result.body)
+
   return (
     <div
-      className={`rounded-lg border p-6 ${
+      className={`rounded-lg border ${
         isCorrect
           ? 'border-success/30'
           : 'border-danger/30'
       }`}
     >
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span
-            className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
-              isCorrect
-                ? 'bg-success-muted text-success-foreground'
-                : 'bg-danger-muted text-danger-foreground'
-            }`}
-          >
-            {index + 1}
-          </span>
-          <span
-            className={`text-sm font-medium ${
-              isCorrect
-                ? 'text-success-foreground'
-                : 'text-danger-foreground'
-            }`}
-          >
-            {isCorrect ? '正解' : '不正解'}
-          </span>
-        </div>
-        {result.timeSpentSec != null && (
-          <span className="text-xs text-muted-foreground">
-            {result.timeSpentSec}s
-          </span>
-        )}
-      </div>
-
-      <div className="mb-4">
-        <MarkdownRenderer content={result.body} />
-      </div>
-
-      <div className="space-y-2">
-        {result.choices.map((choice) => {
-          const wasSelected = result.selectedChoiceIds.includes(choice.id)
-
-          let choiceStyle = 'border-border bg-card'
-          if (choice.isCorrect && wasSelected) {
-            choiceStyle =
-              'border-success/30 bg-success-muted'
-          } else if (choice.isCorrect && !wasSelected) {
-            choiceStyle =
-              'border-success/30 bg-success-muted/50'
-          } else if (!choice.isCorrect && wasSelected) {
-            choiceStyle = 'border-danger/30 bg-danger-muted'
-          }
-
-          return (
-            <div key={choice.id}>
-              <div
-                className={`flex items-start gap-3 rounded-lg border p-3 ${choiceStyle}`}
-              >
-                <div className="flex shrink-0 items-center gap-2">
-                  {choice.isCorrect && (
-                    <svg
-                      aria-hidden="true"
-                      className="h-4 w-4 text-success"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M5 13l4 4L19 7"
-                      />
-                    </svg>
-                  )}
-                  {!choice.isCorrect && wasSelected && (
-                    <svg
-                      aria-hidden="true"
-                      className="h-4 w-4 text-danger"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M6 18L18 6M6 6l12 12"
-                      />
-                    </svg>
-                  )}
-                </div>
-                <div className="flex-1 text-sm">
-                  <MarkdownRenderer content={choice.body} />
-                </div>
-                {wasSelected && (
-                  <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
-                    あなたの回答
-                  </span>
-                )}
-              </div>
-              {choice.explanation && (
-                <ChoiceTips explanation={choice.explanation} className="ml-6" />
-              )}
-            </div>
-          )
-        })}
-      </div>
-
-      {result.explanation && (
-        <div className="mt-4 rounded-lg bg-muted/50 p-4">
-          <p className="mb-1 text-xs font-semibold uppercase text-muted-foreground">
-            解説
+      <button
+        type="button"
+        onClick={() => setIsExpanded((prev) => !prev)}
+        aria-expanded={isExpanded}
+        aria-controls={`question-review-details-${result.questionId}`}
+        className="flex w-full items-start gap-3 rounded-lg p-4 text-left transition-colors hover:bg-muted/40 active:scale-[0.997] motion-safe:transition-[background-color,transform] motion-safe:duration-150"
+      >
+        <span
+          className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
+            isCorrect
+              ? 'bg-success-muted text-success-foreground'
+              : 'bg-danger-muted text-danger-foreground'
+          }`}
+        >
+          {index + 1}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span
+              className={`text-sm font-medium ${
+                isCorrect
+                  ? 'text-success-foreground'
+                  : 'text-danger-foreground'
+              }`}
+            >
+              {isCorrect ? '正解' : '不正解'}
+            </span>
+            {result.timeSpentSec != null && (
+              <span className="text-xs text-muted-foreground">
+                {result.timeSpentSec}s
+              </span>
+            )}
+          </div>
+          <p className="mt-1 truncate text-sm text-muted-foreground">
+            {preview}
           </p>
-          <div className="text-sm">
-            <MarkdownRenderer content={result.explanation} />
+        </div>
+        <svg
+          aria-hidden="true"
+          className={`mt-2 h-4 w-4 shrink-0 text-muted-foreground motion-safe:transition-transform motion-safe:duration-200 ease-out ${
+            isExpanded ? 'rotate-90' : ''
+          }`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2.5}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+
+      <div
+        id={`question-review-details-${result.questionId}`}
+        className="grid motion-safe:transition-[grid-template-rows] motion-safe:duration-250 ease-out"
+        style={{ gridTemplateRows: isExpanded ? '1fr' : '0fr' }}
+      >
+        <div className="overflow-hidden">
+          <div className="border-t px-6 pb-6 pt-4">
+            <div className="mb-4">
+              <MarkdownRenderer content={result.body} />
+            </div>
+
+            <div className="space-y-2">
+              {result.choices.map((choice) => {
+                const wasSelected = result.selectedChoiceIds.includes(choice.id)
+
+                let choiceStyle = 'border-border bg-card'
+                if (choice.isCorrect && wasSelected) {
+                  choiceStyle =
+                    'border-success/30 bg-success-muted'
+                } else if (choice.isCorrect && !wasSelected) {
+                  choiceStyle =
+                    'border-success/30 bg-success-muted/50'
+                } else if (!choice.isCorrect && wasSelected) {
+                  choiceStyle = 'border-danger/30 bg-danger-muted'
+                }
+
+                return (
+                  <div key={choice.id}>
+                    <div
+                      className={`flex items-start gap-3 rounded-lg border p-3 ${choiceStyle}`}
+                    >
+                      <div className="flex shrink-0 items-center gap-2">
+                        {choice.isCorrect && (
+                          <svg
+                            aria-hidden="true"
+                            className="h-4 w-4 text-success"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                        )}
+                        {!choice.isCorrect && wasSelected && (
+                          <svg
+                            aria-hidden="true"
+                            className="h-4 w-4 text-danger"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M6 18L18 6M6 6l12 12"
+                            />
+                          </svg>
+                        )}
+                      </div>
+                      <div className="flex-1 text-sm">
+                        <MarkdownRenderer content={choice.body} />
+                      </div>
+                      {wasSelected && (
+                        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                          あなたの回答
+                        </span>
+                      )}
+                    </div>
+                    {choice.explanation && (
+                      <ChoiceTips
+                        explanation={choice.explanation}
+                        className="ml-6"
+                      />
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            {result.explanation && (
+              <div className="mt-4 rounded-lg bg-muted/50 p-4">
+                <p className="mb-1 text-xs font-semibold uppercase text-muted-foreground">
+                  解説
+                </p>
+                <div className="text-sm">
+                  <MarkdownRenderer content={result.explanation} />
+                </div>
+              </div>
+            )}
+
+            <div className="mt-4 border-t pt-3">
+              <ConfidenceSelector
+                questionId={result.questionId}
+                currentLevel={confidenceLevel}
+                onLevelChange={setConfidenceLevel}
+              />
+            </div>
           </div>
         </div>
-      )}
-
-      <div className="mt-4 border-t pt-3">
-        <ConfidenceSelector
-          questionId={result.questionId}
-          currentLevel={confidenceLevel}
-          onLevelChange={setConfidenceLevel}
-        />
       </div>
     </div>
   )
