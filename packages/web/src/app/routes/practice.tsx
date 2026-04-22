@@ -242,10 +242,12 @@ export default function PracticePage() {
       )
 
       if (response.data) {
-        setAnswerState({
+        const nextState = {
           feedback: response.data,
-          confidenceLevel: response.data.isCorrect ? 0 : 1,
-        })
+          confidenceLevel: (response.data.isCorrect ? 0 : 1) as ConfidenceLevel,
+        }
+        setAnswerState(nextState)
+        feedbackCache.current[currentIndex] = nextState
       }
     } catch (error) {
       throw new Error(
@@ -263,12 +265,6 @@ export default function PracticePage() {
     recordQuestionTime,
     setAnswer,
   ])
-
-  useEffect(() => {
-    if (answerState.feedback) {
-      feedbackCache.current[currentIndex] = answerState
-    }
-  }, [answerState, currentIndex])
 
   const handleNavigate = useCallback(
     (index: number) => {
@@ -719,7 +715,13 @@ export default function PracticePage() {
                   questionId={question.questionId}
                   currentLevel={confidenceLevel}
                   onLevelChange={(level) =>
-                    setAnswerState((prev) => ({ ...prev, confidenceLevel: level }))
+                    setAnswerState((prev) => {
+                      const next = { ...prev, confidenceLevel: level }
+                      if (next.feedback) {
+                        feedbackCache.current[currentIndex] = next
+                      }
+                      return next
+                    })
                   }
                 />
               </div>
