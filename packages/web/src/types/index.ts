@@ -97,6 +97,7 @@ export interface SessionQuestion {
 export interface AnswerFeedback {
   isCorrect: boolean
   explanation: string | null
+  confidenceLevel: number
   choices: Array<{
     id: string
     isCorrect: boolean

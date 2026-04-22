@@ -244,7 +244,7 @@ export default function PracticePage() {
       if (response.data) {
         const nextState = {
           feedback: response.data,
-          confidenceLevel: (response.data.isCorrect ? 0 : 1) as ConfidenceLevel,
+          confidenceLevel: response.data.confidenceLevel as ConfidenceLevel,
         }
         setAnswerState(nextState)
         feedbackCache.current[currentIndex] = nextState

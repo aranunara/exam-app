@@ -324,21 +324,25 @@ app.post('/:id/answers', async (c) => {
     )
   }
 
+  const existingConfidence = await db.query.questionConfidence.findFirst({
+    where: and(
+      eq(questionConfidence.userId, userId),
+      eq(questionConfidence.questionId, body.questionId),
+    ),
+  })
+  const resolvedConfidenceLevel = isCorrect
+    ? (existingConfidence?.level ?? 0)
+    : 1
+
   if (!isCorrect) {
     c.executionCtx.waitUntil(
       (async () => {
         try {
-          const existing = await db.query.questionConfidence.findFirst({
-            where: and(
-              eq(questionConfidence.userId, userId),
-              eq(questionConfidence.questionId, body.questionId),
-            ),
-          })
-          if (existing) {
+          if (existingConfidence) {
             await db
               .update(questionConfidence)
               .set({ level: 1, updatedAt: now() })
-              .where(eq(questionConfidence.id, existing.id))
+              .where(eq(questionConfidence.id, existingConfidence.id))
           } else {
             await db.insert(questionConfidence).values({
               id: generateUlid(),
@@ -361,6 +365,7 @@ app.post('/:id/answers', async (c) => {
       data: {
         isCorrect,
         explanation: snapshot.explanation,
+        confidenceLevel: resolvedConfidenceLevel,
         choices: snapshot.choices.map(
           (ch: {
             id: string
