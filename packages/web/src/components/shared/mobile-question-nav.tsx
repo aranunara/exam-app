@@ -5,6 +5,7 @@ interface MobileQuestionNavProps {
   currentIndex: number
   totalQuestions: number
   answers: Record<number, string[]>
+  answersStatus?: Record<number, boolean>
   onNavigate: (index: number) => void
   onComplete?: () => void
   showCompleteButton?: boolean
@@ -17,6 +18,7 @@ export function MobileQuestionNav({
   currentIndex,
   totalQuestions,
   answers,
+  answersStatus,
   onNavigate,
   onComplete,
   showCompleteButton,
@@ -70,11 +72,18 @@ export function MobileQuestionNav({
               {Array.from({ length: totalQuestions }, (_, i) => {
                 const isAnswered = i in answers
                 const isCurrent = i === currentIndex
+                const status = answersStatus?.[i]
 
                 let btnStyle = 'bg-muted text-muted-foreground'
                 if (isCurrent) {
                   btnStyle =
                     'bg-primary text-primary-foreground ring-2 ring-primary ring-offset-1'
+                } else if (status === true) {
+                  btnStyle =
+                    'bg-success-muted text-success-foreground'
+                } else if (status === false) {
+                  btnStyle =
+                    'bg-danger-muted text-danger-foreground'
                 } else if (isAnswered) {
                   btnStyle =
                     'bg-success-muted text-success-foreground'
@@ -98,11 +107,24 @@ export function MobileQuestionNav({
               })}
             </div>
 
-            <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
-              <div className="flex items-center gap-1.5">
-                <span className="inline-block h-3 w-3 rounded bg-success-muted" />
-                回答済み
-              </div>
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+              {answersStatus ? (
+                <>
+                  <div className="flex items-center gap-1.5">
+                    <span className="inline-block h-3 w-3 rounded bg-success-muted" />
+                    正解
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="inline-block h-3 w-3 rounded bg-danger-muted" />
+                    不正解
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <span className="inline-block h-3 w-3 rounded bg-success-muted" />
+                  回答済み
+                </div>
+              )}
               <div className="flex items-center gap-1.5">
                 <span className="inline-block h-3 w-3 rounded bg-primary" />
                 現在

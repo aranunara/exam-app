@@ -94,6 +94,30 @@ export interface SessionQuestion {
   selectedChoiceIds: string[]
 }
 
+export interface InProgressSession {
+  id: string
+  mode: 'practice' | 'exam'
+  totalQuestions: number
+  answeredCount: number
+  firstUnansweredIndex: number
+  timeSpentSec: number
+  startedAt: string
+}
+
+export interface SessionDetail {
+  id: string
+  workbookId: string
+  mode: 'practice' | 'exam'
+  status: 'in_progress' | 'completed' | 'abandoned'
+  totalQuestions: number
+  answeredCount: number
+  firstUnansweredIndex: number
+  timeSpentSec: number
+  timeLimit: number | null
+  startedAt: string
+  answersStatus: Record<number, boolean>
+}
+
 export interface AnswerFeedback {
   isCorrect: boolean
   explanation: string | null
