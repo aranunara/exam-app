@@ -20,6 +20,8 @@ export const queryKeys = {
     results: (id: string) => ['sessions', id, 'results'] as const,
     previewFilter: (workbookId: string) =>
       ['sessions', 'preview-filter', workbookId] as const,
+    inProgress: (workbookId: string) =>
+      ['sessions', 'in-progress', workbookId] as const,
   },
   stats: {
     overview: (filters?: Record<string, string>) =>

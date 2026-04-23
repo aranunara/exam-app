@@ -14,7 +14,12 @@ import {
 import { api } from '@/lib/api-client'
 import { queryKeys } from '@/lib/query-keys'
 import { formatCountdown, formatElapsed } from '@/lib/format'
-import type { ApiResponse, SessionQuestion } from '@/types'
+import type {
+  ApiResponse,
+  SessionQuestion,
+  InProgressSession,
+  SessionDetail,
+} from '@/types'
 import { MarkdownRenderer } from '@/components/shared/markdown-renderer'
 import { LoadingSpinner } from '@/components/shared/loading-spinner'
 import { MobileQuestionNav } from '@/components/shared/mobile-question-nav'
@@ -88,6 +93,19 @@ export default function ExamPage() {
   const [showAbortConfirm, setShowAbortConfirm] = useState(false)
   const previewInfo = location.state as { title?: string; questionCount?: number; timeLimit?: number | null } | null
 
+  const inProgressQuery = useQuery({
+    queryKey: queryKeys.sessions.inProgress(workbookId ?? ''),
+    queryFn: () =>
+      api.get<ApiResponse<InProgressSession | null>>(
+        `/sessions/in-progress/${workbookId}`,
+      ),
+    enabled: !!workbookId && !isConfirmed,
+    staleTime: 0,
+    retry: false,
+  })
+
+  const inProgressSession = inProgressQuery.data?.data ?? null
+
   const createSessionMutation = useMutation({
     mutationFn: () =>
       api.post<CreateSessionResponse>('/sessions', {
@@ -106,27 +124,73 @@ export default function ExamPage() {
     },
   })
 
+  const resumeSessionMutation = useMutation({
+    mutationFn: (id: string) =>
+      api.get<ApiResponse<SessionDetail>>(`/sessions/${id}`),
+    onSuccess: (response) => {
+      if (response.data) {
+        startSession({
+          sessionId: response.data.id,
+          mode: 'exam',
+          totalQuestions: response.data.totalQuestions,
+          timeLimit: response.data.timeLimit,
+          initialIndex: response.data.firstUnansweredIndex,
+          initialElapsedSec: response.data.timeSpentSec,
+        })
+      }
+    },
+  })
+
+  const discardAndStartMutation = useMutation({
+    mutationFn: async (existingSessionId: string) => {
+      await api.post(`/sessions/${existingSessionId}/abort`, {})
+      return api.post<CreateSessionResponse>('/sessions', {
+        workbookId,
+        mode: 'exam',
+      })
+    },
+    onSuccess: (response) => {
+      if (response.data) {
+        startSession({
+          sessionId: response.data.id,
+          mode: 'exam',
+          totalQuestions: response.data.totalQuestions,
+          timeLimit: response.data.timeLimit,
+        })
+      }
+    },
+  })
+
+  const hasAutoResumedRef = useRef(false)
+
   useEffect(() => {
     setIsConfirmed(false)
+    hasAutoResumedRef.current = false
     reset()
     return () => {
-      const state = useExamStore.getState()
-      if (state.sessionId && !state.isCompleted && Object.keys(state.answers).length > 0) {
-        api.post(`/sessions/${state.sessionId}/complete`, {
-          timeSpentSec: state.elapsedSec,
-        }).catch(() => {})
-      }
       reset()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workbookId])
 
   useEffect(() => {
-    if (isConfirmed) {
+    if (isConfirmed && !useExamStore.getState().sessionId) {
       createSessionMutation.mutate()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConfirmed])
+
+  useEffect(() => {
+    if (hasAutoResumedRef.current) return
+    if (inProgressQuery.isLoading) return
+    if (!inProgressSession) return
+    if (isConfirmed) return
+    hasAutoResumedRef.current = true
+    resumeSessionMutation.mutate(inProgressSession.id, {
+      onSuccess: () => setIsConfirmed(true),
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inProgressQuery.isLoading, inProgressSession, isConfirmed])
 
   useEffect(() => {
     if (!sessionId) return
@@ -153,7 +217,12 @@ export default function ExamPage() {
         timeSpentSec: currentElapsed,
       })
       complete()
-      await queryClient.invalidateQueries({ queryKey: ['stats'] })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['stats'] }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.sessions.inProgress(workbookId ?? ''),
+        }),
+      ])
       navigate(`/exam/${workbookId}/result`, {
         state: { sessionId },
       })
@@ -168,15 +237,18 @@ export default function ExamPage() {
     if (sessionId) {
       try {
         const currentElapsed = useExamStore.getState().elapsedSec
-        await api.post(`/sessions/${sessionId}/complete`, {
+        await api.post(`/sessions/${sessionId}/abort`, {
           timeSpentSec: currentElapsed,
         })
       } catch {}
     }
     complete()
     reset()
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.sessions.inProgress(workbookId ?? ''),
+    })
     navigate(-1)
-  }, [sessionId, navigate, complete, reset])
+  }, [sessionId, workbookId, navigate, complete, reset, queryClient])
 
   const elapsedSec = useElapsedSec()
 
@@ -263,6 +335,7 @@ export default function ExamPage() {
           questionId: question.questionId,
           choiceIds: selectedChoiceIds,
           timeSpentSec,
+          sessionElapsedSec: useExamStore.getState().elapsedSec,
         },
       )
     } catch (error) {
@@ -340,6 +413,17 @@ export default function ExamPage() {
   }, [])
 
   if (!isConfirmed) {
+    const isResumePending =
+      resumeSessionMutation.isPending || discardAndStartMutation.isPending
+
+    if (inProgressQuery.isLoading || isResumePending) {
+      return (
+        <div className="flex h-64 items-center justify-center">
+          <LoadingSpinner label="セッションを確認しています…" />
+        </div>
+      )
+    }
+
     return (
       <div className="mx-auto max-w-lg p-4">
         <div className="rounded-lg border bg-card p-8">
@@ -347,25 +431,79 @@ export default function ExamPage() {
           {previewInfo?.title && (
             <p className="mt-2 text-center text-muted-foreground">{previewInfo.title}</p>
           )}
-          {(previewInfo?.questionCount != null || previewInfo?.timeLimit != null) && (
-            <div className="mt-6 flex justify-center gap-8 text-sm text-muted-foreground">
-              {previewInfo.questionCount != null && (
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-foreground">{previewInfo.questionCount}</p>
-                  <p>問題数</p>
+
+          {inProgressSession && (
+            <div className="mt-6 rounded-lg border border-primary/30 bg-primary/5 p-4">
+              <p className="text-sm font-semibold text-foreground">
+                前回の続きがあります
+              </p>
+              <div className="mt-3 flex items-center gap-3">
+                <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary"
+                    style={{
+                      width: `${(inProgressSession.answeredCount / inProgressSession.totalQuestions) * 100}%`,
+                    }}
+                  />
                 </div>
-              )}
-              {previewInfo.timeLimit != null && (
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-foreground">{Math.floor(previewInfo.timeLimit / 60)}</p>
-                  <p>制限時間（分）</p>
-                </div>
-              )}
+                <span className="text-xs tabular-nums text-muted-foreground">
+                  {inProgressSession.answeredCount}/{inProgressSession.totalQuestions}
+                </span>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                経過時間 {formatElapsed(inProgressSession.timeSpentSec)}
+              </p>
+              <div className="mt-4 flex flex-col gap-2">
+                <button
+                  onClick={() => {
+                    resumeSessionMutation.mutate(inProgressSession.id, {
+                      onSuccess: () => setIsConfirmed(true),
+                    })
+                  }}
+                  disabled={isResumePending}
+                  className="min-h-[44px] rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 active:scale-[0.97] disabled:opacity-50"
+                >
+                  {resumeSessionMutation.isPending ? '再開中…' : '続きから再開'}
+                </button>
+                <button
+                  onClick={() => {
+                    discardAndStartMutation.mutate(inProgressSession.id, {
+                      onSuccess: () => setIsConfirmed(true),
+                    })
+                  }}
+                  disabled={isResumePending}
+                  className="min-h-[44px] rounded-lg px-4 py-2 text-sm text-muted-foreground hover:bg-muted disabled:opacity-50"
+                >
+                  破棄して最初から
+                </button>
+              </div>
             </div>
           )}
-          <p className="mt-6 text-center text-sm text-muted-foreground">
-            開始すると制限時間のカウントが始まります。
-          </p>
+
+          {!inProgressSession && (
+            <>
+              {(previewInfo?.questionCount != null || previewInfo?.timeLimit != null) && (
+                <div className="mt-6 flex justify-center gap-8 text-sm text-muted-foreground">
+                  {previewInfo.questionCount != null && (
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-foreground">{previewInfo.questionCount}</p>
+                      <p>問題数</p>
+                    </div>
+                  )}
+                  {previewInfo.timeLimit != null && (
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-foreground">{Math.floor(previewInfo.timeLimit / 60)}</p>
+                      <p>制限時間（分）</p>
+                    </div>
+                  )}
+                </div>
+              )}
+              <p className="mt-6 text-center text-sm text-muted-foreground">
+                開始すると制限時間のカウントが始まります。
+              </p>
+            </>
+          )}
+
           <div className="mt-6 flex justify-center gap-3">
             <button
               onClick={() => navigate(-1)}
@@ -373,12 +511,14 @@ export default function ExamPage() {
             >
               戻る
             </button>
-            <button
-              onClick={() => setIsConfirmed(true)}
-              className="min-h-[44px] rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-            >
-              開始
-            </button>
+            {!inProgressSession && (
+              <button
+                onClick={() => setIsConfirmed(true)}
+                className="min-h-[44px] rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                開始
+              </button>
+            )}
           </div>
         </div>
       </div>

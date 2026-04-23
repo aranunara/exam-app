@@ -7,6 +7,7 @@ type ExamState = {
   currentIndex: number
   totalQuestions: number
   answers: Record<number, string[]>
+  answersStatus: Record<number, boolean>
   timeLimit: number | null
   startedAt: number | null
   elapsedSec: number
@@ -20,9 +21,13 @@ type ExamActions = {
     mode: 'practice' | 'exam'
     totalQuestions: number
     timeLimit: number | null
+    initialIndex?: number
+    initialElapsedSec?: number
+    initialAnswersStatus?: Record<number, boolean>
   }) => void
   setCurrentIndex: (index: number) => void
   setAnswer: (index: number, choiceIds: string[]) => void
+  setAnswerStatus: (index: number, isCorrect: boolean) => void
   incrementElapsed: () => void
   recordQuestionTime: (index: number, seconds: number) => void
   complete: () => void
@@ -35,6 +40,7 @@ const initialState: ExamState = {
   currentIndex: 0,
   totalQuestions: 0,
   answers: {},
+  answersStatus: {},
   timeLimit: null,
   startedAt: null,
   elapsedSec: 0,
@@ -45,7 +51,15 @@ const initialState: ExamState = {
 export const useExamStore = create<ExamState & ExamActions>((set) => ({
   ...initialState,
 
-  startSession: ({ sessionId, mode, totalQuestions, timeLimit }) =>
+  startSession: ({
+    sessionId,
+    mode,
+    totalQuestions,
+    timeLimit,
+    initialIndex,
+    initialElapsedSec,
+    initialAnswersStatus,
+  }) =>
     set({
       ...initialState,
       sessionId,
@@ -53,6 +67,9 @@ export const useExamStore = create<ExamState & ExamActions>((set) => ({
       totalQuestions,
       timeLimit,
       startedAt: Date.now(),
+      currentIndex: initialIndex ?? 0,
+      elapsedSec: initialElapsedSec ?? 0,
+      answersStatus: initialAnswersStatus ?? {},
     }),
 
   setCurrentIndex: (index) => set({ currentIndex: index }),
@@ -60,6 +77,11 @@ export const useExamStore = create<ExamState & ExamActions>((set) => ({
   setAnswer: (index, choiceIds) =>
     set((state) => ({
       answers: { ...state.answers, [index]: choiceIds },
+    })),
+
+  setAnswerStatus: (index, isCorrect) =>
+    set((state) => ({
+      answersStatus: { ...state.answersStatus, [index]: isCorrect },
     })),
 
   incrementElapsed: () =>
@@ -87,12 +109,14 @@ export const useElapsedSec = () => useExamStore((s) => s.elapsedSec)
 export const useTimeLimit = () => useExamStore((s) => s.timeLimit)
 export const useIsCompleted = () => useExamStore((s) => s.isCompleted)
 export const useAnswers = () => useExamStore((s) => s.answers)
+export const useAnswersStatus = () => useExamStore((s) => s.answersStatus)
 export const useExamActions = () =>
   useExamStore(
     useShallow((s) => ({
       startSession: s.startSession,
       setCurrentIndex: s.setCurrentIndex,
       setAnswer: s.setAnswer,
+      setAnswerStatus: s.setAnswerStatus,
       incrementElapsed: s.incrementElapsed,
       recordQuestionTime: s.recordQuestionTime,
       complete: s.complete,
