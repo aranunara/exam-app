@@ -57,8 +57,15 @@ app.post('/', async (c) => {
     body.filters?.confidenceLevels &&
     body.filters.confidenceLevels.length > 0
   ) {
+    const selectedLevels = body.filters.confidenceLevels
+    const includeNoConfidence = selectedLevels.includes(0)
+    const nonZeroLevels = selectedLevels.filter((l) => l !== 0)
+
     const confidenceRows = await db
-      .select({ questionId: questionConfidence.questionId })
+      .select({
+        questionId: questionConfidence.questionId,
+        level: questionConfidence.level,
+      })
       .from(questionConfidence)
       .where(
         and(
@@ -67,15 +74,16 @@ app.post('/', async (c) => {
             questionConfidence.questionId,
             filteredQuestions.map((q) => q.id),
           ),
-          inArray(questionConfidence.level, body.filters.confidenceLevels),
         ),
       )
-    const confidenceIds = new Set(
-      confidenceRows.map((r) => r.questionId),
+    const levelByQuestion = new Map(
+      confidenceRows.map((r) => [r.questionId, r.level]),
     )
-    filteredQuestions = filteredQuestions.filter((q) =>
-      confidenceIds.has(q.id),
-    )
+    filteredQuestions = filteredQuestions.filter((q) => {
+      const level = levelByQuestion.get(q.id)
+      if (level === undefined) return includeNoConfidence
+      return nonZeroLevels.includes(level)
+    })
   }
 
   if (filteredQuestions.length === 0) {
@@ -214,6 +222,106 @@ app.post('/preview-filter', async (c) => {
   })
 })
 
+app.get('/in-progress/:workbookId', async (c) => {
+  const db = c.get('db')
+  const userId = c.get('userId')
+  const workbookId = c.req.param('workbookId')
+
+  const session = await db.query.examSessions.findFirst({
+    where: and(
+      eq(examSessions.userId, userId),
+      eq(examSessions.workbookId, workbookId),
+      eq(examSessions.status, 'in_progress'),
+    ),
+    orderBy: (s, { desc }) => [desc(s.startedAt)],
+  })
+
+  if (!session) {
+    return c.json({ success: true, data: null })
+  }
+
+  const answers = await db.query.sessionAnswers.findMany({
+    where: eq(sessionAnswers.sessionId, session.id),
+  })
+
+  const answeredCount = answers.filter((a) => a.isCorrect !== null).length
+  const questionOrder: string[] = JSON.parse(session.questionOrder)
+  const answeredIds = new Set(
+    answers.filter((a) => a.isCorrect !== null).map((a) => a.questionId),
+  )
+  const firstUnansweredIndex = questionOrder.findIndex(
+    (qid) => !answeredIds.has(qid),
+  )
+
+  return c.json({
+    success: true,
+    data: {
+      id: session.id,
+      mode: session.mode,
+      totalQuestions: session.totalQuestions,
+      answeredCount,
+      firstUnansweredIndex:
+        firstUnansweredIndex === -1 ? questionOrder.length - 1 : firstUnansweredIndex,
+      timeSpentSec: session.timeSpentSec ?? 0,
+      startedAt: session.startedAt,
+    },
+  })
+})
+
+app.get('/:id', async (c) => {
+  const db = c.get('db')
+  const userId = c.get('userId')
+  const sessionId = c.req.param('id')
+
+  const session = await getSessionForUser(db, sessionId, userId)
+  const workbook = await db.query.workbooks.findFirst({
+    where: eq(workbooks.id, session.workbookId),
+  })
+
+  const answers = await db.query.sessionAnswers.findMany({
+    where: eq(sessionAnswers.sessionId, sessionId),
+  })
+  const answeredCount = answers.filter((a) => a.isCorrect !== null).length
+  const questionOrder: string[] = JSON.parse(session.questionOrder)
+  const answeredIds = new Set(
+    answers.filter((a) => a.isCorrect !== null).map((a) => a.questionId),
+  )
+  const firstUnansweredIndex = questionOrder.findIndex(
+    (qid) => !answeredIds.has(qid),
+  )
+
+  const answersByQuestionId = new Map(
+    answers.map((a) => [a.questionId, a]),
+  )
+  const answersStatus: Record<number, boolean> = {}
+  if (session.mode === 'practice') {
+    questionOrder.forEach((qid, idx) => {
+      const ans = answersByQuestionId.get(qid)
+      if (ans && ans.isCorrect !== null) {
+        answersStatus[idx] = ans.isCorrect
+      }
+    })
+  }
+
+  return c.json({
+    success: true,
+    data: {
+      id: session.id,
+      workbookId: session.workbookId,
+      mode: session.mode,
+      status: session.status,
+      totalQuestions: session.totalQuestions,
+      answeredCount,
+      firstUnansweredIndex:
+        firstUnansweredIndex === -1 ? questionOrder.length - 1 : firstUnansweredIndex,
+      timeSpentSec: session.timeSpentSec ?? 0,
+      timeLimit: workbook?.timeLimit ?? null,
+      startedAt: session.startedAt,
+      answersStatus,
+    },
+  })
+})
+
 app.get('/:id/questions/:index', async (c) => {
   const db = c.get('db')
   const userId = c.get('userId')
@@ -311,6 +419,17 @@ app.post('/:id/answers', async (c) => {
     })
     .where(eq(sessionAnswers.id, answer.id))
 
+  if (body.sessionElapsedSec !== undefined) {
+    const nextElapsed = Math.max(
+      session.timeSpentSec ?? 0,
+      body.sessionElapsedSec,
+    )
+    await db
+      .update(examSessions)
+      .set({ timeSpentSec: nextElapsed })
+      .where(eq(examSessions.id, sessionId))
+  }
+
   await db
     .delete(sessionAnswerChoices)
     .where(eq(sessionAnswerChoices.sessionAnswerId, answer.id))
@@ -399,11 +518,20 @@ app.post('/:id/complete', async (c) => {
     where: eq(sessionAnswers.sessionId, sessionId),
   })
 
-  const correctCount = answers.filter((a) => a.isCorrect === true).length
-  const scorePercent = calculateScorePercent(
-    correctCount,
-    session.totalQuestions,
-  )
+  const answered = answers.filter((a) => a.isCorrect !== null)
+  const unansweredIds = answers
+    .filter((a) => a.isCorrect === null)
+    .map((a) => a.id)
+
+  const correctCount = answered.filter((a) => a.isCorrect === true).length
+  const answeredCount = answered.length
+  const scorePercent = calculateScorePercent(correctCount, answeredCount)
+
+  if (unansweredIds.length > 0) {
+    await db
+      .delete(sessionAnswers)
+      .where(inArray(sessionAnswers.id, unansweredIds))
+  }
 
   await db
     .update(examSessions)
@@ -411,6 +539,7 @@ app.post('/:id/complete', async (c) => {
       status: 'completed',
       correctCount,
       scorePercent,
+      totalQuestions: answeredCount,
       completedAt: now(),
       timeSpentSec: body.timeSpentSec,
     })
@@ -420,10 +549,53 @@ app.post('/:id/complete', async (c) => {
     success: true,
     data: {
       correctCount,
-      totalQuestions: session.totalQuestions,
+      totalQuestions: answeredCount,
       scorePercent,
     },
   })
+})
+
+app.post('/:id/abort', async (c) => {
+  const db = c.get('db')
+  const userId = c.get('userId')
+  const sessionId = c.req.param('id')
+  const body = completeSessionSchema.parse(await c.req.json().catch(() => ({})))
+
+  const session = await getSessionForUser(db, sessionId, userId)
+  if (session.status !== 'in_progress') {
+    throw new AppError('Session already finished', 400)
+  }
+
+  const answers = await db.query.sessionAnswers.findMany({
+    where: eq(sessionAnswers.sessionId, sessionId),
+  })
+  const answered = answers.filter((a) => a.isCorrect !== null)
+  const unansweredIds = answers
+    .filter((a) => a.isCorrect === null)
+    .map((a) => a.id)
+
+  if (unansweredIds.length > 0) {
+    await db
+      .delete(sessionAnswers)
+      .where(inArray(sessionAnswers.id, unansweredIds))
+  }
+
+  const nextElapsed =
+    body.timeSpentSec !== undefined
+      ? Math.max(session.timeSpentSec ?? 0, body.timeSpentSec)
+      : (session.timeSpentSec ?? 0)
+
+  await db
+    .update(examSessions)
+    .set({
+      status: 'abandoned',
+      totalQuestions: answered.length,
+      completedAt: now(),
+      timeSpentSec: nextElapsed,
+    })
+    .where(eq(examSessions.id, sessionId))
+
+  return c.json({ success: true, data: { id: sessionId } })
 })
 
 app.get('/:id/results', async (c) => {
