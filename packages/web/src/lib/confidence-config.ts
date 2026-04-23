@@ -8,6 +8,14 @@ export interface ConfidenceLevelConfig {
   borderClass: string
 }
 
+export const noConfidenceConfig: ConfidenceLevelConfig = {
+  level: 0,
+  label: '自信度なし',
+  bgClass: 'bg-muted',
+  textClass: 'text-foreground',
+  borderClass: 'border-border',
+}
+
 export const confidenceLevels: readonly ConfidenceLevelConfig[] = [
   {
     level: 1,

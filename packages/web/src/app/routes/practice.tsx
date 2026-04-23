@@ -7,18 +7,27 @@ import {
   useCurrentIndex,
   useTotalQuestions,
   useAnswers,
+  useAnswersStatus,
   useElapsedSec,
   useExamActions,
 } from '@/features/exam/stores/exam-store'
 import { api } from '@/lib/api-client'
 import { queryKeys } from '@/lib/query-keys'
 import { formatElapsed } from '@/lib/format'
-import type { ApiResponse, SessionQuestion, AnswerFeedback, ConfidenceLevel, FilterPreview } from '@/types'
+import type {
+  ApiResponse,
+  SessionQuestion,
+  AnswerFeedback,
+  ConfidenceLevel,
+  FilterPreview,
+  InProgressSession,
+  SessionDetail,
+} from '@/types'
 import { MarkdownRenderer } from '@/components/shared/markdown-renderer'
 import { LoadingSpinner } from '@/components/shared/loading-spinner'
 import { ConfidenceSelector } from '@/components/shared/confidence-selector'
 import { ChoiceTips } from '@/components/shared/choice-tips'
-import { confidenceLevels } from '@/lib/confidence-config'
+import { confidenceLevels, noConfidenceConfig } from '@/lib/confidence-config'
 import { MobileQuestionNav } from '@/components/shared/mobile-question-nav'
 
 function PracticeTimer() {
@@ -46,10 +55,12 @@ export default function PracticePage() {
   const currentIndex = useCurrentIndex()
   const totalQuestions = useTotalQuestions()
   const answers = useAnswers()
+  const answersStatus = useAnswersStatus()
   const {
     startSession,
     setCurrentIndex,
     setAnswer,
+    setAnswerStatus,
     incrementElapsed,
     recordQuestionTime,
     complete,
@@ -90,9 +101,14 @@ export default function PracticePage() {
     if (!filterPreview) return previewInfo?.questionCount ?? 0
     if (!hasActiveFilter) return filterPreview.totalQuestions
 
-    return Object.values(filterPreview.confidenceByQuestion).filter(
+    const matchedWithLevel = Object.values(filterPreview.confidenceByQuestion).filter(
       (level) => filterConfidenceLevels.includes(level),
     ).length
+    const noConfidenceCount = filterConfidenceLevels.includes(0)
+      ? filterPreview.totalQuestions -
+        Object.keys(filterPreview.confidenceByQuestion).length
+      : 0
+    return matchedWithLevel + noConfidenceCount
   }, [filterPreview, filterConfidenceLevels, hasActiveFilter, previewInfo?.questionCount])
 
   const toggleConfidenceLevel = useCallback((level: number) => {
@@ -102,6 +118,19 @@ export default function PracticePage() {
         : [...prev, level],
     )
   }, [])
+
+  const inProgressQuery = useQuery({
+    queryKey: queryKeys.sessions.inProgress(workbookId ?? ''),
+    queryFn: () =>
+      api.get<ApiResponse<InProgressSession | null>>(
+        `/sessions/in-progress/${workbookId}`,
+      ),
+    enabled: !!workbookId && !isConfirmed,
+    staleTime: 0,
+    retry: false,
+  })
+
+  const inProgressSession = inProgressQuery.data?.data ?? null
 
   const createSessionMutation = useMutation({
     mutationFn: () =>
@@ -124,27 +153,77 @@ export default function PracticePage() {
     },
   })
 
+  const resumeSessionMutation = useMutation({
+    mutationFn: (sessionId: string) =>
+      api.get<ApiResponse<SessionDetail>>(`/sessions/${sessionId}`),
+    onSuccess: (response) => {
+      if (response.data) {
+        startSession({
+          sessionId: response.data.id,
+          mode: 'practice',
+          totalQuestions: response.data.totalQuestions,
+          timeLimit: response.data.timeLimit,
+          initialIndex: response.data.firstUnansweredIndex,
+          initialElapsedSec: response.data.timeSpentSec,
+          initialAnswersStatus: response.data.answersStatus,
+        })
+      }
+    },
+  })
+
+  const discardAndStartMutation = useMutation({
+    mutationFn: async (existingSessionId: string) => {
+      await api.post(`/sessions/${existingSessionId}/abort`, {})
+      return api.post<CreateSessionResponse>('/sessions', {
+        workbookId,
+        mode: 'practice',
+        ...(filterConfidenceLevels.length > 0
+          ? { filters: { confidenceLevels: filterConfidenceLevels } }
+          : {}),
+      })
+    },
+    onSuccess: (response) => {
+      if (response.data) {
+        startSession({
+          sessionId: response.data.id,
+          mode: 'practice',
+          totalQuestions: response.data.totalQuestions,
+          timeLimit: response.data.timeLimit,
+        })
+      }
+    },
+  })
+
+  const hasAutoResumedRef = useRef(false)
+
   useEffect(() => {
     setIsConfirmed(false)
+    hasAutoResumedRef.current = false
     reset()
     return () => {
-      const state = useExamStore.getState()
-      if (state.sessionId && !state.isCompleted && Object.keys(state.answers).length > 0) {
-        api.post(`/sessions/${state.sessionId}/complete`, {
-          timeSpentSec: state.elapsedSec,
-        }).catch(() => {})
-      }
       reset()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workbookId])
 
   useEffect(() => {
-    if (isConfirmed) {
+    if (isConfirmed && !useExamStore.getState().sessionId) {
       createSessionMutation.mutate()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConfirmed])
+
+  useEffect(() => {
+    if (hasAutoResumedRef.current) return
+    if (inProgressQuery.isLoading) return
+    if (!inProgressSession) return
+    if (isConfirmed) return
+    hasAutoResumedRef.current = true
+    resumeSessionMutation.mutate(inProgressSession.id, {
+      onSuccess: () => setIsConfirmed(true),
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inProgressQuery.isLoading, inProgressSession, isConfirmed])
 
   useEffect(() => {
     if (!sessionId) return
@@ -238,6 +317,7 @@ export default function PracticePage() {
           questionId: question.questionId,
           choiceIds: selectedChoiceIds,
           timeSpentSec,
+          sessionElapsedSec: useExamStore.getState().elapsedSec,
         },
       )
 
@@ -248,6 +328,7 @@ export default function PracticePage() {
         }
         setAnswerState(nextState)
         feedbackCache.current[currentIndex] = nextState
+        setAnswerStatus(currentIndex, response.data.isCorrect)
       }
     } catch (error) {
       throw new Error(
@@ -264,6 +345,7 @@ export default function PracticePage() {
     currentIndex,
     recordQuestionTime,
     setAnswer,
+    setAnswerStatus,
   ])
 
   const handleNavigate = useCallback(
@@ -282,7 +364,12 @@ export default function PracticePage() {
         timeSpentSec: currentElapsed,
       })
       complete()
-      await queryClient.invalidateQueries({ queryKey: ['stats'] })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['stats'] }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.sessions.inProgress(workbookId ?? ''),
+        }),
+      ])
       navigate(`/exam/${workbookId}/result`, {
         state: { sessionId },
       })
@@ -297,15 +384,18 @@ export default function PracticePage() {
     if (sessionId) {
       try {
         const currentElapsed = useExamStore.getState().elapsedSec
-        await api.post(`/sessions/${sessionId}/complete`, {
+        await api.post(`/sessions/${sessionId}/abort`, {
           timeSpentSec: currentElapsed,
         })
       } catch {}
     }
     complete()
     reset()
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.sessions.inProgress(workbookId ?? ''),
+    })
     navigate(-1)
-  }, [sessionId, navigate, complete, reset])
+  }, [sessionId, workbookId, navigate, complete, reset, queryClient])
 
   const keyHandlerRef = useRef<(e: KeyboardEvent) => void>(() => {})
   keyHandlerRef.current = (e: KeyboardEvent) => {
@@ -359,13 +449,32 @@ export default function PracticePage() {
   }, [])
 
   if (!isConfirmed) {
+    const isResumePending =
+      resumeSessionMutation.isPending || discardAndStartMutation.isPending
+
+    if (inProgressQuery.isLoading || isResumePending) {
+      return (
+        <div className="flex h-64 items-center justify-center">
+          <LoadingSpinner label="セッションを確認しています…" />
+        </div>
+      )
+    }
+
     const confidenceCounts = filterPreview
-      ? confidenceLevels.map((config) => ({
-          ...config,
-          count: Object.values(filterPreview.confidenceByQuestion).filter(
-            (l) => l === config.level,
-          ).length,
-        }))
+      ? [
+          ...confidenceLevels.map((config) => ({
+            ...config,
+            count: Object.values(filterPreview.confidenceByQuestion).filter(
+              (l) => l === config.level,
+            ).length,
+          })),
+          {
+            ...noConfidenceConfig,
+            count:
+              filterPreview.totalQuestions -
+              Object.keys(filterPreview.confidenceByQuestion).length,
+          },
+        ]
       : []
 
     return (
@@ -375,52 +484,106 @@ export default function PracticePage() {
           {previewInfo?.title && (
             <p className="mt-2 text-center text-muted-foreground">{previewInfo.title}</p>
           )}
-          <div className="mt-6 flex justify-center text-sm text-muted-foreground">
-            <div className="text-center">
-              <p className="text-2xl font-bold text-foreground">
-                {hasActiveFilter ? filteredCount : (previewInfo?.questionCount ?? filterPreview?.totalQuestions ?? '—')}
+
+          {inProgressSession && (
+            <div className="mt-6 rounded-lg border border-primary/30 bg-primary/5 p-4">
+              <p className="text-sm font-semibold text-foreground">
+                前回の続きがあります
               </p>
-              <p>{hasActiveFilter ? `/ ${filterPreview?.totalQuestions ?? previewInfo?.questionCount ?? ''} 問中` : '問題数'}</p>
-            </div>
-          </div>
-
-          {filterPreview && confidenceCounts.some((c) => c.count > 0) && (
-            <div className="mt-6 space-y-4">
-              <p className="text-center text-xs text-muted-foreground">自信度で絞り込み</p>
-
-              <div className="flex flex-wrap gap-2">
-                {confidenceCounts.map((config) => {
-                  if (config.count === 0) return null
-                  const isActive = filterConfidenceLevels.includes(config.level)
-                  return (
-                    <button
-                      key={config.level}
-                      type="button"
-                      onClick={() => toggleConfidenceLevel(config.level)}
-                      className={`min-h-[44px] rounded-lg border px-3 py-2 text-sm transition-colors ${
-                        isActive
-                          ? `${config.bgClass} ${config.textClass} ${config.borderClass}`
-                          : 'border-border bg-card text-muted-foreground hover:bg-muted'
-                      }`}
-                    >
-                      {config.label}
-                      <span className="ml-1.5 text-xs opacity-70">{config.count}</span>
-                    </button>
-                  )
-                })}
+              <div className="mt-3 flex items-center gap-3">
+                <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary"
+                    style={{
+                      width: `${(inProgressSession.answeredCount / inProgressSession.totalQuestions) * 100}%`,
+                    }}
+                  />
+                </div>
+                <span className="text-xs tabular-nums text-muted-foreground">
+                  {inProgressSession.answeredCount}/{inProgressSession.totalQuestions}
+                </span>
               </div>
-
-              {hasActiveFilter && filteredCount === 0 && (
-                <p className="text-center text-sm text-destructive">
-                  条件に一致する問題がありません
-                </p>
-              )}
+              <p className="mt-2 text-xs text-muted-foreground">
+                経過時間 {formatElapsed(inProgressSession.timeSpentSec)}
+              </p>
+              <div className="mt-4 flex flex-col gap-2">
+                <button
+                  onClick={() => {
+                    resumeSessionMutation.mutate(inProgressSession.id, {
+                      onSuccess: () => setIsConfirmed(true),
+                    })
+                  }}
+                  disabled={isResumePending}
+                  className="min-h-[44px] rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 active:scale-[0.97] disabled:opacity-50"
+                >
+                  {resumeSessionMutation.isPending ? '再開中…' : '続きから再開'}
+                </button>
+                <button
+                  onClick={() => {
+                    discardAndStartMutation.mutate(inProgressSession.id, {
+                      onSuccess: () => setIsConfirmed(true),
+                    })
+                  }}
+                  disabled={isResumePending}
+                  className="min-h-[44px] rounded-lg px-4 py-2 text-sm text-muted-foreground hover:bg-muted disabled:opacity-50"
+                >
+                  破棄して最初から
+                </button>
+              </div>
             </div>
           )}
 
-          <p className="mt-6 text-center text-sm text-muted-foreground">
-            各問題ごとに正解・解説を確認できます。
-          </p>
+          {!inProgressSession && (
+            <>
+              <div className="mt-6 flex justify-center text-sm text-muted-foreground">
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-foreground">
+                    {hasActiveFilter ? filteredCount : (previewInfo?.questionCount ?? filterPreview?.totalQuestions ?? '—')}
+                  </p>
+                  <p>{hasActiveFilter ? `/ ${filterPreview?.totalQuestions ?? previewInfo?.questionCount ?? ''} 問中` : '問題数'}</p>
+                </div>
+              </div>
+
+              {filterPreview && confidenceCounts.some((c) => c.count > 0) && (
+                <div className="mt-6 space-y-4">
+                  <p className="text-center text-xs text-muted-foreground">自信度で絞り込み</p>
+
+                  <div className="flex flex-wrap gap-2">
+                    {confidenceCounts.map((config) => {
+                      if (config.count === 0) return null
+                      const isActive = filterConfidenceLevels.includes(config.level)
+                      return (
+                        <button
+                          key={config.level}
+                          type="button"
+                          onClick={() => toggleConfidenceLevel(config.level)}
+                          className={`min-h-[44px] rounded-lg border px-3 py-2 text-sm transition-colors ${
+                            isActive
+                              ? `${config.bgClass} ${config.textClass} ${config.borderClass}`
+                              : 'border-border bg-card text-muted-foreground hover:bg-muted'
+                          }`}
+                        >
+                          {config.label}
+                          <span className="ml-1.5 text-xs opacity-70">{config.count}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  {hasActiveFilter && filteredCount === 0 && (
+                    <p className="text-center text-sm text-destructive">
+                      条件に一致する問題がありません
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <p className="mt-6 text-center text-sm text-muted-foreground">
+                各問題ごとに正解・解説を確認できます。
+              </p>
+            </>
+          )}
+
           <div className="mt-6 flex justify-center gap-3">
             <button
               onClick={() => navigate(-1)}
@@ -428,13 +591,15 @@ export default function PracticePage() {
             >
               戻る
             </button>
-            <button
-              onClick={() => setIsConfirmed(true)}
-              disabled={hasActiveFilter && filteredCount === 0}
-              className="min-h-[44px] rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 active:scale-[0.97] disabled:opacity-50"
-            >
-              開始
-            </button>
+            {!inProgressSession && (
+              <button
+                onClick={() => setIsConfirmed(true)}
+                disabled={hasActiveFilter && filteredCount === 0}
+                className="min-h-[44px] rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 active:scale-[0.97] disabled:opacity-50"
+              >
+                開始
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -767,14 +932,16 @@ export default function PracticePage() {
             <h3 className="mb-3 text-sm font-semibold">問題ナビゲーター</h3>
             <div className="grid grid-cols-5 gap-1">
               {Array.from({ length: totalQuestions }, (_, i) => {
-                const isAnswered = i in answers
                 const isCurrent = i === currentIndex
+                const status = answersStatus[i]
 
                 let btnStyle = 'bg-muted text-muted-foreground'
                 if (isCurrent) {
                   btnStyle = 'bg-primary text-primary-foreground ring-2 ring-primary ring-offset-1'
-                } else if (isAnswered) {
+                } else if (status === true) {
                   btnStyle = 'bg-success-muted text-success-foreground'
+                } else if (status === false) {
+                  btnStyle = 'bg-danger-muted text-danger-foreground'
                 }
 
                 return (
@@ -791,7 +958,11 @@ export default function PracticePage() {
             <div className="mt-4 space-y-1 text-xs text-muted-foreground">
               <div className="flex items-center gap-2">
                 <span className="inline-block h-3 w-3 rounded bg-success-muted" />
-                回答済み
+                正解
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="inline-block h-3 w-3 rounded bg-danger-muted" />
+                不正解
               </div>
               <div className="flex items-center gap-2">
                 <span className="inline-block h-3 w-3 rounded bg-primary" />
@@ -807,6 +978,7 @@ export default function PracticePage() {
         currentIndex={currentIndex}
         totalQuestions={totalQuestions}
         answers={answers}
+        answersStatus={answersStatus}
         onNavigate={handleNavigate}
         onComplete={handleComplete}
         showCompleteButton={!!feedback && currentIndex >= totalQuestions - 1}

@@ -5,7 +5,7 @@ export const createSessionSchema = z.object({
   mode: z.enum(['practice', 'exam']),
   filters: z
     .object({
-      confidenceLevels: z.array(z.number().int().min(1).max(4)).optional(),
+      confidenceLevels: z.array(z.number().int().min(0).max(4)).optional(),
     })
     .optional(),
 })
@@ -18,6 +18,7 @@ export const submitAnswerSchema = z.object({
   questionId: z.string().min(1),
   choiceIds: z.array(z.string()).min(1),
   timeSpentSec: z.number().int().min(0).optional(),
+  sessionElapsedSec: z.number().int().min(0).optional(),
 })
 
 export const completeSessionSchema = z.object({
