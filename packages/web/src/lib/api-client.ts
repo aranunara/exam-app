@@ -2,10 +2,29 @@ const API_BASE = import.meta.env.VITE_API_URL
   ? `${import.meta.env.VITE_API_URL}/api/v1`
   : '/api/v1'
 
+const REQUEST_TIMEOUT_MS = 15_000
+const TOKEN_TIMEOUT_MS = 5_000
+
 type RequestOptions = {
   method?: string
   body?: unknown
   params?: Record<string, string>
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms)
+    promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (err) => {
+        clearTimeout(timer)
+        reject(err)
+      },
+    )
+  })
 }
 
 async function request<T>(
@@ -25,16 +44,33 @@ async function request<T>(
     'Content-Type': 'application/json',
   }
 
-  const token = await getAuthToken()
+  const token = await withTimeout(
+    getAuthToken(),
+    TOKEN_TIMEOUT_MS,
+    '認証トークンの取得がタイムアウトしました',
+  )
   if (token) {
     headers['Authorization'] = `Bearer ${token}`
   }
 
-  const response = await fetch(url.toString(), {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  })
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  let response: Response
+  try {
+    response = await fetch(url.toString(), {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    })
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error('リクエストがタイムアウトしました')
+    }
+    throw err
+  } finally {
+    clearTimeout(timer)
+  }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Request failed' }))
