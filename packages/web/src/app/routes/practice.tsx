@@ -174,6 +174,10 @@ export default function PracticePage() {
   const discardAndStartMutation = useMutation({
     mutationFn: async (existingSessionId: string) => {
       await api.post(`/sessions/${existingSessionId}/abort`, {})
+      queryClient.setQueryData(
+        queryKeys.sessions.inProgress(workbookId ?? ''),
+        { success: true, data: null },
+      )
       return api.post<CreateSessionResponse>('/sessions', {
         workbookId,
         mode: 'practice',
@@ -194,11 +198,8 @@ export default function PracticePage() {
     },
   })
 
-  const hasAutoResumedRef = useRef(false)
-
   useEffect(() => {
     setIsConfirmed(false)
-    hasAutoResumedRef.current = false
     reset()
     return () => {
       reset()
@@ -212,18 +213,6 @@ export default function PracticePage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isConfirmed])
-
-  useEffect(() => {
-    if (hasAutoResumedRef.current) return
-    if (inProgressQuery.isLoading) return
-    if (!inProgressSession) return
-    if (isConfirmed) return
-    hasAutoResumedRef.current = true
-    resumeSessionMutation.mutate(inProgressSession.id, {
-      onSuccess: () => setIsConfirmed(true),
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inProgressQuery.isLoading, inProgressSession, isConfirmed])
 
   useEffect(() => {
     if (!sessionId) return
@@ -391,9 +380,10 @@ export default function PracticePage() {
     }
     complete()
     reset()
-    await queryClient.invalidateQueries({
-      queryKey: queryKeys.sessions.inProgress(workbookId ?? ''),
-    })
+    queryClient.setQueryData(
+      queryKeys.sessions.inProgress(workbookId ?? ''),
+      { success: true, data: null },
+    )
     navigate(-1)
   }, [sessionId, workbookId, navigate, complete, reset, queryClient])
 
