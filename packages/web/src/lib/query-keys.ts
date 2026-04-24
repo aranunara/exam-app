@@ -1,3 +1,17 @@
+type FilterInput = Record<string, string | undefined> | undefined
+
+function normalizeFilters(filters: FilterInput): Record<string, string> {
+  if (!filters) return {}
+  const entries: [string, string][] = []
+  for (const key of Object.keys(filters).sort()) {
+    const value = filters[key]
+    if (value !== undefined && value !== '') {
+      entries.push([key, value])
+    }
+  }
+  return Object.fromEntries(entries)
+}
+
 export const queryKeys = {
   subjects: {
     all: ['subjects'] as const,
@@ -9,8 +23,8 @@ export const queryKeys = {
   },
   workbooks: {
     all: ['workbooks'] as const,
-    list: (filters: Record<string, string>) =>
-      ['workbooks', filters] as const,
+    list: (filters?: FilterInput) =>
+      ['workbooks', 'list', normalizeFilters(filters)] as const,
     detail: (id: string) => ['workbooks', id] as const,
   },
   sessions: {
@@ -24,22 +38,22 @@ export const queryKeys = {
       ['sessions', 'in-progress', workbookId] as const,
   },
   stats: {
-    overview: (filters?: Record<string, string>) =>
-      ['stats', 'overview', filters ?? {}] as const,
-    subjects: (filters?: Record<string, string>) =>
-      ['stats', 'subjects', filters ?? {}] as const,
-    tags: (filters?: Record<string, string>) =>
-      ['stats', 'tags', filters ?? {}] as const,
-    history: (page: number, filters?: Record<string, string>) =>
-      ['stats', 'history', page, filters ?? {}] as const,
-    weakAreas: (filters?: Record<string, string>) =>
-      ['stats', 'weakAreas', filters ?? {}] as const,
+    overview: (filters?: FilterInput) =>
+      ['stats', 'overview', normalizeFilters(filters)] as const,
+    subjects: (filters?: FilterInput) =>
+      ['stats', 'subjects', normalizeFilters(filters)] as const,
+    tags: (filters?: FilterInput) =>
+      ['stats', 'tags', normalizeFilters(filters)] as const,
+    history: (page: number, filters?: FilterInput) =>
+      ['stats', 'history', page, normalizeFilters(filters)] as const,
+    weakAreas: (filters?: FilterInput) =>
+      ['stats', 'weakAreas', normalizeFilters(filters)] as const,
     workbookScores: ['stats', 'workbookScores'] as const,
   },
   confidence: {
     byQuestion: (questionId: string) =>
       ['confidence', questionId] as const,
     batch: (questionIds: string[]) =>
-      ['confidence', 'batch', questionIds] as const,
+      ['confidence', 'batch', [...questionIds].sort()] as const,
   },
 } as const

@@ -91,7 +91,7 @@ export default function PracticePage() {
         workbookId,
       }),
     enabled: !!workbookId && !isConfirmed,
-    staleTime: 0,
+    staleTime: 1000 * 60,
   })
 
   const filterPreview = previewQuery.data?.data
@@ -126,7 +126,7 @@ export default function PracticePage() {
         `/sessions/in-progress/${workbookId}`,
       ),
     enabled: !!workbookId && !isConfirmed,
-    staleTime: 0,
+    staleTime: 1000 * 30,
     retry: false,
   })
 
@@ -221,6 +221,7 @@ export default function PracticePage() {
         `/sessions/${sessionId}/questions/${currentIndex}`,
       ),
     enabled: !!sessionId,
+    staleTime: Infinity,
   })
 
   const question = questionQuery.data?.data ?? null
@@ -337,7 +338,11 @@ export default function PracticePage() {
       })
       complete()
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['stats'] }),
+        queryClient.invalidateQueries({ queryKey: ['stats', 'history'] }),
+        queryClient.invalidateQueries({ queryKey: ['stats', 'overview'] }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.stats.workbookScores,
+        }),
         queryClient.invalidateQueries({
           queryKey: queryKeys.sessions.inProgress(workbookId ?? ''),
         }),

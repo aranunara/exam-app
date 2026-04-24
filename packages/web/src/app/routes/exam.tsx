@@ -100,7 +100,7 @@ export default function ExamPage() {
         `/sessions/in-progress/${workbookId}`,
       ),
     enabled: !!workbookId && !isConfirmed,
-    staleTime: 0,
+    staleTime: 1000 * 30,
     retry: false,
   })
 
@@ -207,7 +207,11 @@ export default function ExamPage() {
       })
       complete()
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['stats'] }),
+        queryClient.invalidateQueries({ queryKey: ['stats', 'history'] }),
+        queryClient.invalidateQueries({ queryKey: ['stats', 'overview'] }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.stats.workbookScores,
+        }),
         queryClient.invalidateQueries({
           queryKey: queryKeys.sessions.inProgress(workbookId ?? ''),
         }),
@@ -261,6 +265,7 @@ export default function ExamPage() {
         `/sessions/${sessionId}/questions/${currentIndex}`,
       ),
     enabled: !!sessionId,
+    staleTime: Infinity,
   })
 
   const question = questionQuery.data?.data ?? null
