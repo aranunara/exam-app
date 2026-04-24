@@ -99,6 +99,17 @@ app.post('/', async (c) => {
   const timestamp = now()
   const sessionId = generateUlid()
 
+  await db
+    .update(examSessions)
+    .set({ status: 'abandoned', completedAt: timestamp })
+    .where(
+      and(
+        eq(examSessions.userId, userId),
+        eq(examSessions.workbookId, body.workbookId),
+        eq(examSessions.status, 'in_progress'),
+      ),
+    )
+
   await db.insert(examSessions).values({
     id: sessionId,
     userId,
@@ -585,15 +596,28 @@ app.post('/:id/abort', async (c) => {
       ? Math.max(session.timeSpentSec ?? 0, body.timeSpentSec)
       : (session.timeSpentSec ?? 0)
 
+  const timestamp = now()
+
   await db
     .update(examSessions)
     .set({
       status: 'abandoned',
       totalQuestions: answered.length,
-      completedAt: now(),
+      completedAt: timestamp,
       timeSpentSec: nextElapsed,
     })
     .where(eq(examSessions.id, sessionId))
+
+  await db
+    .update(examSessions)
+    .set({ status: 'abandoned', completedAt: timestamp })
+    .where(
+      and(
+        eq(examSessions.userId, userId),
+        eq(examSessions.workbookId, session.workbookId),
+        eq(examSessions.status, 'in_progress'),
+      ),
+    )
 
   return c.json({ success: true, data: { id: sessionId } })
 })
