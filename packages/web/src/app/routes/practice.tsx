@@ -171,30 +171,13 @@ export default function PracticePage() {
     },
   })
 
-  const discardAndStartMutation = useMutation({
+  const discardMutation = useMutation({
     mutationFn: async (existingSessionId: string) => {
       await api.post(`/sessions/${existingSessionId}/abort`, {})
       queryClient.setQueryData(
         queryKeys.sessions.inProgress(workbookId ?? ''),
         { success: true, data: null },
       )
-      return api.post<CreateSessionResponse>('/sessions', {
-        workbookId,
-        mode: 'practice',
-        ...(filterConfidenceLevels.length > 0
-          ? { filters: { confidenceLevels: filterConfidenceLevels } }
-          : {}),
-      })
-    },
-    onSuccess: (response) => {
-      if (response.data) {
-        startSession({
-          sessionId: response.data.id,
-          mode: 'practice',
-          totalQuestions: response.data.totalQuestions,
-          timeLimit: response.data.timeLimit,
-        })
-      }
     },
   })
 
@@ -440,7 +423,7 @@ export default function PracticePage() {
 
   if (!isConfirmed) {
     const isResumePending =
-      resumeSessionMutation.isPending || discardAndStartMutation.isPending
+      resumeSessionMutation.isPending || discardMutation.isPending
 
     if (inProgressQuery.isLoading || isResumePending) {
       return (
@@ -510,14 +493,12 @@ export default function PracticePage() {
                 </button>
                 <button
                   onClick={() => {
-                    discardAndStartMutation.mutate(inProgressSession.id, {
-                      onSuccess: () => setIsConfirmed(true),
-                    })
+                    discardMutation.mutate(inProgressSession.id)
                   }}
                   disabled={isResumePending}
                   className="min-h-[44px] rounded-lg px-4 py-2 text-sm text-muted-foreground hover:bg-muted disabled:opacity-50"
                 >
-                  破棄して最初から
+                  {discardMutation.isPending ? '破棄中…' : '破棄して最初から'}
                 </button>
               </div>
             </div>
