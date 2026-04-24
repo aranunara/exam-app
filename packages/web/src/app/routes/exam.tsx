@@ -100,7 +100,7 @@ export default function ExamPage() {
         `/sessions/in-progress/${workbookId}`,
       ),
     enabled: !!workbookId && !isConfirmed,
-    staleTime: 0,
+    staleTime: 1000 * 30,
     retry: false,
   })
 
@@ -265,6 +265,7 @@ export default function ExamPage() {
         `/sessions/${sessionId}/questions/${currentIndex}`,
       ),
     enabled: !!sessionId,
+    staleTime: Infinity,
   })
 
   const question = questionQuery.data?.data ?? null

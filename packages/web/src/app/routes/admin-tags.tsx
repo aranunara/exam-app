@@ -274,6 +274,7 @@ export default function AdminTagsPage() {
   const tagsQuery = useQuery({
     queryKey: queryKeys.tags.all,
     queryFn: () => api.get<ApiResponse<Tag[]>>('/tags'),
+    staleTime: 1000 * 60 * 30,
   })
 
   const createMutation = useMutation({

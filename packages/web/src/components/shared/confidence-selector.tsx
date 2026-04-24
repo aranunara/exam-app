@@ -29,8 +29,31 @@ export function ConfidenceSelector({
       ),
     onMutate: async (newLevel) => {
       onLevelChange?.(newLevel)
+
+      await queryClient.cancelQueries({ queryKey: ['confidence', 'batch'] })
+      const previousBatches = queryClient.getQueriesData<
+        ApiResponse<Record<string, number>>
+      >({ queryKey: ['confidence', 'batch'] })
+      queryClient.setQueriesData<ApiResponse<Record<string, number>>>(
+        { queryKey: ['confidence', 'batch'] },
+        (old) => {
+          if (!old?.data) return old
+          return {
+            ...old,
+            data: { ...old.data, [questionId]: newLevel },
+          }
+        },
+      )
+      return { previousBatches }
     },
-    onSuccess: () => {
+    onError: (_err, _newLevel, context) => {
+      if (context?.previousBatches) {
+        for (const [key, data] of context.previousBatches) {
+          queryClient.setQueryData(key, data)
+        }
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.confidence.byQuestion(questionId),
       })

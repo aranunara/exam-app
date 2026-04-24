@@ -214,6 +214,7 @@ export default function HistoryPage() {
   const subjectsQuery = useQuery({
     queryKey: queryKeys.subjects.all,
     queryFn: () => api.get<ApiResponse<Subject[]>>('/subjects'),
+    staleTime: 1000 * 60 * 30,
   })
 
   const allWorkbooksQuery = useQuery({
