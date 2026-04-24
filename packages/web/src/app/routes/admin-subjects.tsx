@@ -347,13 +347,32 @@ export default function AdminSubjectsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete<ApiResponse<null>>(`/subjects/${id}`),
+    onMutate: async (id: string) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.subjects.all })
+      const previous = queryClient.getQueryData<ApiResponse<Subject[]>>(
+        queryKeys.subjects.all,
+      )
+      queryClient.setQueryData<ApiResponse<Subject[]>>(
+        queryKeys.subjects.all,
+        (old) =>
+          old?.data
+            ? { ...old, data: old.data.filter((s) => s.id !== id) }
+            : old,
+      )
+      return { previous }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.subjects.all })
       queryClient.invalidateQueries({ queryKey: queryKeys.workbooks.all })
       setDeletingId(null)
       setMutationError(null)
     },
-    onError: (error: Error) => setMutationError(error.message),
+    onError: (error: Error, _id, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(queryKeys.subjects.all, context.previous)
+      }
+      setMutationError(error.message)
+    },
   })
 
   if (subjectsQuery.isLoading) return <LoadingSkeleton />

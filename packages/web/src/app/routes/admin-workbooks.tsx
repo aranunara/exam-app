@@ -79,12 +79,29 @@ export default function AdminWorkbooksPage() {
   const deleteMutation = useMutation({
     mutationFn: (id: string) =>
       api.delete<ApiResponse<null>>(`/workbooks/${id}`),
+    onMutate: async (id: string) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.workbooks.all })
+      const previous = queryClient.getQueryData<ApiResponse<Workbook[]>>(
+        queryKeys.workbooks.all,
+      )
+      queryClient.setQueryData<ApiResponse<Workbook[]>>(
+        queryKeys.workbooks.all,
+        (old) =>
+          old?.data
+            ? { ...old, data: old.data.filter((w) => w.id !== id) }
+            : old,
+      )
+      return { previous }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.workbooks.all })
       setDeletingId(null)
       setMutationError(null)
     },
-    onError: (error: Error) => {
+    onError: (error: Error, _id, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(queryKeys.workbooks.all, context.previous)
+      }
       setMutationError(error.message)
     },
   })

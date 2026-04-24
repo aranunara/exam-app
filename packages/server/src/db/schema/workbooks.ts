@@ -23,7 +23,10 @@ export const workbooks = sqliteTable(
     createdAt: text('created_at').notNull(),
     updatedAt: text('updated_at').notNull(),
   },
-  (table) => [index('idx_question_sets_user_id').on(table.userId)],
+  (table) => [
+    index('idx_question_sets_user_id').on(table.userId),
+    index('idx_question_sets_user_subject').on(table.userId, table.subjectId),
+  ],
 )
 
 export const workbookTags = sqliteTable(

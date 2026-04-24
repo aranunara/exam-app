@@ -301,12 +301,31 @@ export default function AdminTagsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete<ApiResponse<null>>(`/tags/${id}`),
+    onMutate: async (id: string) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.tags.all })
+      const previous = queryClient.getQueryData<ApiResponse<Tag[]>>(
+        queryKeys.tags.all,
+      )
+      queryClient.setQueryData<ApiResponse<Tag[]>>(
+        queryKeys.tags.all,
+        (old) =>
+          old?.data
+            ? { ...old, data: old.data.filter((t) => t.id !== id) }
+            : old,
+      )
+      return { previous }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.tags.all })
       setDeletingId(null)
       setMutationError(null)
     },
-    onError: (error: Error) => setMutationError(error.message),
+    onError: (error: Error, _id, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(queryKeys.tags.all, context.previous)
+      }
+      setMutationError(error.message)
+    },
   })
 
   if (tagsQuery.isLoading) return <LoadingSkeleton />
