@@ -153,7 +153,7 @@ app.get('/history', async (c) => {
 
   const conditions = buildSessionFilters(userId, { subjectId, workbookId })
 
-  const sessions = await db
+  const rows = await db
     .select({
       id: examSessions.id,
       mode: examSessions.mode,
@@ -166,6 +166,7 @@ app.get('/history', async (c) => {
       timeSpentSec: examSessions.timeSpentSec,
       workbookTitle: workbooks.title,
       subjectName: subjects.name,
+      total: sql<number>`count(*) over()`,
     })
     .from(examSessions)
     .innerJoin(workbooks, eq(examSessions.workbookId, workbooks.id))
@@ -175,13 +176,8 @@ app.get('/history', async (c) => {
     .limit(limit)
     .offset(offset)
 
-  const countResult = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(examSessions)
-    .innerJoin(workbooks, eq(examSessions.workbookId, workbooks.id))
-    .where(and(...conditions))
-
-  const total = countResult[0]?.count ?? 0
+  const total = rows[0]?.total ?? 0
+  const sessions = rows.map(({ total: _total, ...rest }) => rest)
 
   return c.json({
     success: true,
@@ -252,25 +248,36 @@ app.get('/workbook-scores', async (c) => {
 
   const conditions = buildSessionFilters(userId, { subjectId, workbookId })
 
-  let query = db
+  let inner = db
     .select({
       workbookId: examSessions.workbookId,
       scorePercent: examSessions.scorePercent,
       completedAt: examSessions.completedAt,
+      rn: sql<number>`row_number() over (partition by ${examSessions.workbookId} order by ${examSessions.completedAt} desc)`.as(
+        'rn',
+      ),
     })
     .from(examSessions)
     .$dynamic()
 
   if (subjectId) {
-    query = query.innerJoin(
+    inner = inner.innerJoin(
       workbooks,
       eq(examSessions.workbookId, workbooks.id),
     )
   }
 
-  const sessions = await query
-    .where(and(...conditions))
-    .orderBy(desc(examSessions.completedAt))
+  const ranked = inner.where(and(...conditions)).as('ranked')
+
+  const sessions = await db
+    .select({
+      workbookId: ranked.workbookId,
+      scorePercent: ranked.scorePercent,
+      completedAt: ranked.completedAt,
+    })
+    .from(ranked)
+    .where(sql`${ranked.rn} <= ${limit}`)
+    .orderBy(ranked.workbookId, desc(ranked.completedAt))
 
   const grouped: Record<
     string,
@@ -281,9 +288,7 @@ app.get('/workbook-scores', async (c) => {
     if (!grouped[s.workbookId]) {
       grouped[s.workbookId] = { scores: [], lastPlayedAt: s.completedAt }
     }
-    if (grouped[s.workbookId].scores.length < limit) {
-      grouped[s.workbookId].scores.push(s.scorePercent ?? 0)
-    }
+    grouped[s.workbookId].scores.push(s.scorePercent ?? 0)
   }
 
   const data = Object.entries(grouped).map(([wbId, v]) => ({

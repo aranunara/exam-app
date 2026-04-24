@@ -170,15 +170,18 @@ app.patch('/:setId/questions/reorder', async (c) => {
   await getWorkbookForUser(db, setId, userId)
   const body = reorderQuestionsSchema.parse(await c.req.json())
 
+  if (body.orders.length === 0) {
+    return c.json({ success: true })
+  }
+
   const timestamp = now()
-  await Promise.all(
-    body.orders.map(({ id, sortOrder }) =>
-      db
-        .update(questions)
-        .set({ sortOrder, updatedAt: timestamp })
-        .where(eq(questions.id, id)),
-    ),
+  const statements = body.orders.map(({ id, sortOrder }) =>
+    db
+      .update(questions)
+      .set({ sortOrder, updatedAt: timestamp })
+      .where(and(eq(questions.id, id), eq(questions.workbookId, setId))),
   )
+  await db.batch(statements as unknown as Parameters<typeof db.batch>[0])
 
   return c.json({ success: true })
 })

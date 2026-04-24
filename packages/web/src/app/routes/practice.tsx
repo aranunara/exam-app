@@ -337,7 +337,11 @@ export default function PracticePage() {
       })
       complete()
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['stats'] }),
+        queryClient.invalidateQueries({ queryKey: ['stats', 'history'] }),
+        queryClient.invalidateQueries({ queryKey: ['stats', 'overview'] }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.stats.workbookScores,
+        }),
         queryClient.invalidateQueries({
           queryKey: queryKeys.sessions.inProgress(workbookId ?? ''),
         }),
