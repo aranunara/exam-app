@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { eq, and, desc, sql, type SQL } from 'drizzle-orm'
+import { eq, and, desc, gt, inArray, sql, type SQL } from 'drizzle-orm'
 import type { Env } from '../../types'
 import {
   examSessions,
@@ -18,7 +18,8 @@ function buildSessionFilters(
 ): SQL[] {
   const conditions: SQL[] = [
     eq(examSessions.userId, userId),
-    eq(examSessions.status, 'completed'),
+    inArray(examSessions.status, ['completed', 'abandoned']),
+    gt(examSessions.totalQuestions, 0),
   ]
   if (opts.workbookId) {
     conditions.push(eq(examSessions.workbookId, opts.workbookId))

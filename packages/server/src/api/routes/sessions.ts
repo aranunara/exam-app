@@ -23,6 +23,10 @@ import { calculateScorePercent } from '../../lib/scoring'
 import { chunkedInsert } from '../../lib/chunked-insert'
 import { AppError } from '../middleware/error-handler'
 import { getSessionForUser } from '../helpers/ownership'
+import {
+  abandonSession,
+  abandonInProgressSessionsForWorkbook,
+} from '../helpers/abandon-session'
 
 const app = new Hono<Env>()
 
@@ -99,16 +103,12 @@ app.post('/', async (c) => {
   const timestamp = now()
   const sessionId = generateUlid()
 
-  await db
-    .update(examSessions)
-    .set({ status: 'abandoned', completedAt: timestamp })
-    .where(
-      and(
-        eq(examSessions.userId, userId),
-        eq(examSessions.workbookId, body.workbookId),
-        eq(examSessions.status, 'in_progress'),
-      ),
-    )
+  await abandonInProgressSessionsForWorkbook(
+    db,
+    userId,
+    body.workbookId,
+    { timestamp },
+  )
 
   await db.insert(examSessions).values({
     id: sessionId,
@@ -577,47 +577,19 @@ app.post('/:id/abort', async (c) => {
     throw new AppError('Session already finished', 400)
   }
 
-  const answers = await db.query.sessionAnswers.findMany({
-    where: eq(sessionAnswers.sessionId, sessionId),
-  })
-  const answered = answers.filter((a) => a.isCorrect !== null)
-  const unansweredIds = answers
-    .filter((a) => a.isCorrect === null)
-    .map((a) => a.id)
-
-  if (unansweredIds.length > 0) {
-    await db
-      .delete(sessionAnswers)
-      .where(inArray(sessionAnswers.id, unansweredIds))
-  }
-
-  const nextElapsed =
-    body.timeSpentSec !== undefined
-      ? Math.max(session.timeSpentSec ?? 0, body.timeSpentSec)
-      : (session.timeSpentSec ?? 0)
-
   const timestamp = now()
 
-  await db
-    .update(examSessions)
-    .set({
-      status: 'abandoned',
-      totalQuestions: answered.length,
-      completedAt: timestamp,
-      timeSpentSec: nextElapsed,
-    })
-    .where(eq(examSessions.id, sessionId))
+  await abandonSession(db, session, {
+    timeSpentSec: body.timeSpentSec,
+    timestamp,
+  })
 
-  await db
-    .update(examSessions)
-    .set({ status: 'abandoned', completedAt: timestamp })
-    .where(
-      and(
-        eq(examSessions.userId, userId),
-        eq(examSessions.workbookId, session.workbookId),
-        eq(examSessions.status, 'in_progress'),
-      ),
-    )
+  await abandonInProgressSessionsForWorkbook(
+    db,
+    userId,
+    session.workbookId,
+    { timestamp },
+  )
 
   return c.json({ success: true, data: { id: sessionId } })
 })
