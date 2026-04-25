@@ -25,6 +25,7 @@ import type {
   Tag,
 } from '@/types'
 import type { ConfidenceLevel } from '@/lib/confidence-config'
+import { useMobileHeader } from '@/components/layout/mobile-header-context'
 
 interface SetFormData {
   title: string
@@ -248,6 +249,12 @@ export default function AdminWorkbookEditPage() {
   const queryClient = useQueryClient()
   const isNew = id === 'new'
   const tipsModal = useModal()
+
+  useMobileHeader({
+    variant: 'compact',
+    title: isNew ? '問題集を作成' : '問題集を編集',
+    backTo: '/admin/workbooks',
+  })
 
   const [setForm, setSetForm] = useState<SetFormData>({
     title: '',

@@ -23,6 +23,7 @@ import type {
 import { MarkdownRenderer } from '@/components/shared/markdown-renderer'
 import { LoadingSpinner } from '@/components/shared/loading-spinner'
 import { MobileQuestionNav } from '@/components/shared/mobile-question-nav'
+import { useMobileHeader } from '@/components/layout/mobile-header-context'
 
 function ExamTimer() {
   const elapsedSec = useElapsedSec()
@@ -64,6 +65,8 @@ type CreateSessionResponse = ApiResponse<{
 type AnswerReceivedResponse = ApiResponse<{ received: true }>
 
 export default function ExamPage() {
+  useMobileHeader({ variant: 'hidden' })
+
   const { workbookId } = useParams<{ workbookId: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()

@@ -10,6 +10,7 @@ import {
   ResponsiveTable,
   type ColumnDef,
 } from '@/components/shared/responsive-table'
+import { useMobileHeader } from '@/components/layout/mobile-header-context'
 import type {
   ApiResponse,
   Subject,
@@ -194,6 +195,8 @@ function HistoryFilterBar({
 const HISTORY_LIMIT = 20
 
 export default function HistoryPage() {
+  useMobileHeader({ variant: 'compact', title: '履歴' })
+
   const [page, setPage] = useState(1)
   const [subjectId, setSubjectId] = useState('')
   const [workbookId, setWorkbookId] = useState('')

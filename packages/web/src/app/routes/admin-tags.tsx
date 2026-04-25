@@ -4,6 +4,7 @@ import { api } from '@/lib/api-client'
 import { queryKeys } from '@/lib/query-keys'
 import { ErrorMessage } from '@/components/shared/error-message'
 import type { ApiResponse, Tag } from '@/types'
+import { useMobileHeader } from '@/components/layout/mobile-header-context'
 
 /* ─── Constants ─── */
 
@@ -265,6 +266,8 @@ function LoadingSkeleton() {
 /* ─── Main Page ─── */
 
 export default function AdminTagsPage() {
+  useMobileHeader({ variant: 'compact', title: 'タグ' })
+
   const queryClient = useQueryClient()
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)

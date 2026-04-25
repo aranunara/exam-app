@@ -10,6 +10,7 @@ import { LoadingSpinner } from '@/components/shared/loading-spinner'
 import { MarkdownRenderer } from '@/components/shared/markdown-renderer'
 import { StaggerChildren } from '@/components/shared/stagger-children'
 import type { ApiResponse, HistoryEntry, SessionResult } from '@/types'
+import { useMobileHeader } from '@/components/layout/mobile-header-context'
 
 /* ─── Question Result (per question in expanded view) ─── */
 
@@ -234,6 +235,12 @@ const LIMIT = 20
 export default function WorkbookHistoryPage() {
   const { workbookId } = useParams<{ workbookId: string }>()
   const [page, setPage] = useState(1)
+
+  useMobileHeader({
+    variant: 'compact',
+    title: '履歴',
+    backTo: '/dashboard',
+  })
 
   const historyQuery = useQuery({
     queryKey: queryKeys.stats.history(page, { workbookId: workbookId! }),
