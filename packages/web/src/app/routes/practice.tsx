@@ -29,6 +29,7 @@ import { ConfidenceSelector } from '@/components/shared/confidence-selector'
 import { ChoiceTips } from '@/components/shared/choice-tips'
 import { confidenceLevels, noConfidenceConfig } from '@/lib/confidence-config'
 import { MobileQuestionNav } from '@/components/shared/mobile-question-nav'
+import { useMobileHeader } from '@/components/layout/mobile-header-context'
 
 function PracticeTimer() {
   const elapsedSec = useElapsedSec()
@@ -48,6 +49,8 @@ type CreateSessionResponse = ApiResponse<{
 }>
 
 export default function PracticePage() {
+  useMobileHeader({ variant: 'hidden' })
+
   const { workbookId } = useParams<{ workbookId: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()

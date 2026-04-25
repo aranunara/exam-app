@@ -4,6 +4,7 @@ import { api } from '@/lib/api-client'
 import { queryKeys } from '@/lib/query-keys'
 import { ErrorMessage } from '@/components/shared/error-message'
 import type { ApiResponse, Workbook } from '@/types'
+import { useMobileHeader } from '@/components/layout/mobile-header-context'
 
 interface ImportPreview {
   title: string
@@ -281,6 +282,8 @@ function ImportSection() {
 }
 
 export default function AdminImportExportPage() {
+  useMobileHeader({ variant: 'compact', title: 'インポート/エクスポート' })
+
   const setsQuery = useQuery({
     queryKey: queryKeys.workbooks.all,
     queryFn: () =>

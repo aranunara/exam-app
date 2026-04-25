@@ -9,6 +9,7 @@ import { LoadingSpinner } from '@/components/shared/loading-spinner'
 import { ConfidenceSelector } from '@/components/shared/confidence-selector'
 import { AnimatedNumber } from '@/components/shared/animated-number'
 import { ChoiceTips } from '@/components/shared/choice-tips'
+import { useMobileHeader } from '@/components/layout/mobile-header-context'
 
 function ScoreSummary({
   result,
@@ -350,6 +351,12 @@ function QuestionReviewList({ results }: { results: SessionResult['results'] }) 
 }
 
 export default function ExamResultPage() {
+  useMobileHeader({
+    variant: 'compact',
+    title: '試験結果',
+    backTo: '/dashboard',
+  })
+
   const { workbookId } = useParams<{ workbookId: string }>()
   const location = useLocation()
   const navigate = useNavigate()

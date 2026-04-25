@@ -10,6 +10,7 @@ import {
   type ColumnDef,
 } from '@/components/shared/responsive-table'
 import type { ApiResponse, Workbook, Subject } from '@/types'
+import { useMobileHeader } from '@/components/layout/mobile-header-context'
 
 function DeleteConfirmation({
   title,
@@ -60,6 +61,8 @@ function LoadingSkeleton() {
 }
 
 export default function AdminWorkbooksPage() {
+  useMobileHeader({ variant: 'compact', title: '問題集' })
+
   const queryClient = useQueryClient()
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [mutationError, setMutationError] = useState<string | null>(null)

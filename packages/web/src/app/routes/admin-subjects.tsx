@@ -5,6 +5,7 @@ import { api } from '@/lib/api-client'
 import { queryKeys } from '@/lib/query-keys'
 import { ErrorMessage } from '@/components/shared/error-message'
 import type { ApiResponse, Subject, Workbook } from '@/types'
+import { useMobileHeader } from '@/components/layout/mobile-header-context'
 
 /* ─── Form types ─── */
 
@@ -306,6 +307,8 @@ function LoadingSkeleton() {
 /* ─── Main Page ─── */
 
 export default function AdminSubjectsPage() {
+  useMobileHeader({ variant: 'compact', title: '科目' })
+
   const queryClient = useQueryClient()
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)

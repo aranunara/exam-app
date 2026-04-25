@@ -5,6 +5,7 @@ import { queryKeys } from '@/lib/query-keys'
 import { ErrorMessage } from '@/components/shared/error-message'
 import { StaggerChildren } from '@/components/shared/stagger-children'
 import type { ApiResponse, Subject, Workbook } from '@/types'
+import { useMobileHeader } from '@/components/layout/mobile-header-context'
 
 function SubjectHeader({ subject }: { subject: Subject }) {
   return (
@@ -190,6 +191,14 @@ export default function SubjectExams() {
     enabled: !!subjectId,
   })
 
+  const subject = subjectQuery.data?.data
+
+  useMobileHeader({
+    variant: 'compact',
+    title: subject?.name,
+    backTo: '/dashboard',
+  })
+
   const isLoading = subjectQuery.isLoading || workbooksQuery.isLoading
   const error = subjectQuery.error || workbooksQuery.error
 
@@ -201,7 +210,6 @@ export default function SubjectExams() {
     return <ErrorMessage message={error.message} />
   }
 
-  const subject = subjectQuery.data?.data
   const workbooks = workbooksQuery.data?.data ?? []
 
   if (!subject) {

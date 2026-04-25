@@ -1,10 +1,10 @@
 import { useEffect } from 'react'
-import { Outlet, Link, useLocation } from 'react-router'
-import { SignedIn, UserButton } from '@clerk/clerk-react'
+import { Outlet, useLocation } from 'react-router'
 import { useMobileDrawer } from '@/hooks/use-mobile-drawer'
 import { useSidebarContext } from './sidebar-context'
-import { HamburgerButton } from './hamburger-button'
 import { MobileDrawer } from './mobile-drawer'
+import { MobileHeader } from './mobile-header'
+import { MobileHeaderProvider } from './mobile-header-context'
 import { Sidebar } from './sidebar'
 import { SidebarProvider } from './sidebar-provider'
 import { MobileTabBar } from './mobile-tab-bar'
@@ -45,23 +45,11 @@ function AppLayoutInner() {
 
       <Sidebar />
 
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur md:hidden">
-        <div className="flex h-12 items-center px-4">
-          <Link to="/dashboard" className="text-base font-bold">
-            Exam App
-          </Link>
-          <div className="ml-auto flex items-center gap-2">
-            <SignedIn>
-              <UserButton />
-            </SignedIn>
-            <HamburgerButton
-              ref={drawer.triggerRef}
-              isOpen={drawer.isOpen}
-              onClick={drawer.toggle}
-            />
-          </div>
-        </div>
-      </header>
+      <MobileHeader
+        drawerOpen={drawer.isOpen}
+        onDrawerToggle={drawer.toggle}
+        triggerRef={drawer.triggerRef}
+      />
 
       <main
         id="main-content"
@@ -88,7 +76,9 @@ function AppLayoutInner() {
 export function AppLayout() {
   return (
     <SidebarProvider>
-      <AppLayoutInner />
+      <MobileHeaderProvider>
+        <AppLayoutInner />
+      </MobileHeaderProvider>
     </SidebarProvider>
   )
 }

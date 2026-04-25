@@ -9,6 +9,7 @@ import { MarkdownRenderer } from '@/components/shared/markdown-renderer'
 import { ConfidenceSelector } from '@/components/shared/confidence-selector'
 import { ChoiceTips } from '@/components/shared/choice-tips'
 import type { ApiResponse, SessionResult, ConfidenceLevel } from '@/types'
+import { useMobileHeader } from '@/components/layout/mobile-header-context'
 
 function SessionSummary({
   result,
@@ -263,6 +264,12 @@ function LoadingSkeleton() {
 }
 
 export default function HistoryDetailPage() {
+  useMobileHeader({
+    variant: 'compact',
+    title: '試験履歴',
+    backTo: '/stats',
+  })
+
   const { attemptId } = useParams<{ attemptId: string }>()
 
   const resultQuery = useQuery({
