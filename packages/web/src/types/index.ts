@@ -122,6 +122,7 @@ export interface AnswerFeedback {
   isCorrect: boolean
   explanation: string | null
   confidenceLevel: number
+  previousConfidenceLevel: number
   choices: Array<{
     id: string
     isCorrect: boolean

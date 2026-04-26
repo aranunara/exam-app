@@ -27,7 +27,12 @@ import { MarkdownRenderer } from '@/components/shared/markdown-renderer'
 import { LoadingSpinner } from '@/components/shared/loading-spinner'
 import { ConfidenceSelector } from '@/components/shared/confidence-selector'
 import { ChoiceTips } from '@/components/shared/choice-tips'
-import { confidenceLevels, noConfidenceConfig } from '@/lib/confidence-config'
+import {
+  confidenceLevels,
+  getConfidenceConfig,
+  noConfidenceConfig,
+} from '@/lib/confidence-config'
+import { calculateAutoConfidence } from '@/lib/confidence-auto'
 import { MobileQuestionNav } from '@/components/shared/mobile-question-nav'
 import { useMobileHeader } from '@/components/layout/mobile-header-context'
 
@@ -37,6 +42,47 @@ function PracticeTimer() {
     <span className="rounded-lg bg-muted px-3 py-1 font-mono text-sm tabular-nums">
       {formatElapsed(elapsedSec)}
     </span>
+  )
+}
+
+function AutoConfidenceNotice({
+  fromLevel,
+  toLevel,
+}: {
+  fromLevel: ConfidenceLevel
+  toLevel: ConfidenceLevel
+}) {
+  const fromConfig = getConfidenceConfig(fromLevel) ?? noConfidenceConfig
+  const toConfig = getConfidenceConfig(toLevel) ?? noConfidenceConfig
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground motion-safe:motion-preset-fade motion-safe:motion-duration-200"
+    >
+      <span className="font-medium">自動更新</span>
+      <span
+        className={`rounded-md px-2 py-0.5 ${fromConfig.bgClass} ${fromConfig.textClass}`}
+      >
+        {fromConfig.label}
+      </span>
+      <svg
+        aria-hidden="true"
+        className="h-3.5 w-3.5"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
+      </svg>
+      <span
+        className={`rounded-md px-2 py-0.5 ${toConfig.bgClass} ${toConfig.textClass}`}
+      >
+        {toConfig.label}
+      </span>
+      <span className="text-[11px]">下のボタンで変更できます</span>
+    </div>
   )
 }
 
@@ -74,12 +120,22 @@ export default function PracticePage() {
   const [answerState, setAnswerState] = useState<{
     feedback: AnswerFeedback | null
     confidenceLevel: ConfidenceLevel
-  }>({ feedback: null, confidenceLevel: 0 })
+    autoUpdatedFrom: ConfidenceLevel | null
+  }>({ feedback: null, confidenceLevel: 0, autoUpdatedFrom: null })
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const { feedback, confidenceLevel } = answerState
+  const { feedback, confidenceLevel, autoUpdatedFrom } = answerState
   const questionStartTime = useRef<number>(Date.now())
-  const feedbackCache = useRef<Record<number, { feedback: AnswerFeedback | null; confidenceLevel: ConfidenceLevel }>>({})
+  const feedbackCache = useRef<
+    Record<
+      number,
+      {
+        feedback: AnswerFeedback | null
+        confidenceLevel: ConfidenceLevel
+        autoUpdatedFrom: ConfidenceLevel | null
+      }
+    >
+  >({})
 
   const location = useLocation()
   const [isConfirmed, setIsConfirmed] = useState(false)
@@ -251,7 +307,13 @@ export default function PracticePage() {
       const stored = answers[currentIndex]
       setSelectedChoiceIds(stored ?? question.selectedChoiceIds ?? [])
       const cached = feedbackCache.current[currentIndex]
-      setAnswerState(cached ?? { feedback: null, confidenceLevel: 0 })
+      setAnswerState(
+        cached ?? {
+          feedback: null,
+          confidenceLevel: 0,
+          autoUpdatedFrom: null,
+        },
+      )
       questionStartTime.current = Date.now()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -298,9 +360,37 @@ export default function PracticePage() {
       )
 
       if (response.data) {
+        const previousLevel =
+          response.data.previousConfidenceLevel as ConfidenceLevel
+        const autoLevel = calculateAutoConfidence(
+          previousLevel,
+          response.data.isCorrect,
+        )
+        const didChange = autoLevel !== previousLevel
+
+        if (didChange && response.data.isCorrect) {
+          api
+            .put<ApiResponse<{ questionId: string; level: number }>>(
+              '/confidence',
+              { questionId: question.questionId, level: autoLevel },
+            )
+            .catch(() => {})
+          queryClient.setQueriesData<ApiResponse<Record<string, number>>>(
+            { queryKey: ['confidence', 'batch'] },
+            (old) => {
+              if (!old?.data) return old
+              return {
+                ...old,
+                data: { ...old.data, [question.questionId]: autoLevel },
+              }
+            },
+          )
+        }
+
         const nextState = {
           feedback: response.data,
-          confidenceLevel: response.data.confidenceLevel as ConfidenceLevel,
+          confidenceLevel: autoLevel,
+          autoUpdatedFrom: didChange ? previousLevel : null,
         }
         setAnswerState(nextState)
         feedbackCache.current[currentIndex] = nextState
@@ -322,6 +412,7 @@ export default function PracticePage() {
     recordQuestionTime,
     setAnswer,
     setAnswerStatus,
+    queryClient,
   ])
 
   const handleNavigate = useCallback(
@@ -854,13 +945,23 @@ export default function PracticePage() {
                   <MarkdownRenderer content={feedback.explanation} />
                 </div>
               )}
-              <div className="mt-3 border-t border-current/10 pt-3">
+              <div className="mt-3 space-y-2 border-t border-current/10 pt-3">
+                {autoUpdatedFrom !== null && (
+                  <AutoConfidenceNotice
+                    fromLevel={autoUpdatedFrom}
+                    toLevel={confidenceLevel}
+                  />
+                )}
                 <ConfidenceSelector
                   questionId={question.questionId}
                   currentLevel={confidenceLevel}
                   onLevelChange={(level) =>
                     setAnswerState((prev) => {
-                      const next = { ...prev, confidenceLevel: level }
+                      const next = {
+                        ...prev,
+                        confidenceLevel: level,
+                        autoUpdatedFrom: null,
+                      }
                       if (next.feedback) {
                         feedbackCache.current[currentIndex] = next
                       }

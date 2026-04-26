@@ -460,9 +460,8 @@ app.post('/:id/answers', async (c) => {
       eq(questionConfidence.questionId, body.questionId),
     ),
   })
-  const resolvedConfidenceLevel = isCorrect
-    ? (existingConfidence?.level ?? 0)
-    : 1
+  const previousConfidenceLevel = existingConfidence?.level ?? 0
+  const resolvedConfidenceLevel = isCorrect ? previousConfidenceLevel : 1
 
   if (!isCorrect) {
     c.executionCtx.waitUntil(
@@ -496,6 +495,7 @@ app.post('/:id/answers', async (c) => {
         isCorrect,
         explanation: snapshot.explanation,
         confidenceLevel: resolvedConfidenceLevel,
+        previousConfidenceLevel,
         choices: snapshot.choices.map(
           (ch: {
             id: string
