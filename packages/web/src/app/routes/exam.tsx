@@ -86,10 +86,16 @@ export default function ExamPage() {
   } = useExamActions()
 
   const [selectedChoiceIds, setSelectedChoiceIds] = useState<string[]>([])
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [showConfirmComplete, setShowConfirmComplete] = useState(false)
   const questionStartTime = useRef<number>(Date.now())
   const hasAutoSubmitted = useRef(false)
+  const pendingSaveRef = useRef<{
+    index: number
+    questionId: string
+    choiceIds: string[]
+    timer: ReturnType<typeof setTimeout>
+  } | null>(null)
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve())
 
   const location = useLocation()
   const [isConfirmed, setIsConfirmed] = useState(false)
@@ -201,9 +207,67 @@ export default function ExamPage() {
     return () => window.removeEventListener('beforeunload', handler)
   }, [sessionId])
 
+  const persistAnswer = useCallback(
+    (index: number, questionId: string, choiceIds: string[]) => {
+      if (!sessionId) return
+      const timeSpentSec = Math.round(
+        (Date.now() - questionStartTime.current) / 1000,
+      )
+      recordQuestionTime(index, timeSpentSec)
+      setAnswer(index, choiceIds)
+
+      const next = saveQueueRef.current.then(async () => {
+        try {
+          await api.post<AnswerReceivedResponse>(
+            `/sessions/${sessionId}/answers`,
+            {
+              questionId,
+              choiceIds,
+              timeSpentSec,
+              sessionElapsedSec: useExamStore.getState().elapsedSec,
+            },
+          )
+        } catch (error) {
+          console.error('Failed to autosave answer:', error)
+        }
+      })
+      saveQueueRef.current = next
+    },
+    [sessionId, recordQuestionTime, setAnswer],
+  )
+
+  const flushPendingSave = useCallback(() => {
+    const pending = pendingSaveRef.current
+    if (!pending) return
+    clearTimeout(pending.timer)
+    pendingSaveRef.current = null
+    persistAnswer(pending.index, pending.questionId, pending.choiceIds)
+  }, [persistAnswer])
+
+  const scheduleSave = useCallback(
+    (index: number, questionId: string, choiceIds: string[]) => {
+      if (pendingSaveRef.current) {
+        clearTimeout(pendingSaveRef.current.timer)
+        pendingSaveRef.current = null
+      }
+
+      if (choiceIds.length === 0) return
+
+      const timer = setTimeout(() => {
+        pendingSaveRef.current = null
+        persistAnswer(index, questionId, choiceIds)
+      }, 500)
+
+      pendingSaveRef.current = { index, questionId, choiceIds, timer }
+    },
+    [persistAnswer],
+  )
+
   const handleComplete = useCallback(async () => {
     if (!sessionId) return
     try {
+      flushPendingSave()
+      await saveQueueRef.current
       const currentElapsed = useExamStore.getState().elapsedSec
       await api.post(`/sessions/${sessionId}/complete`, {
         timeSpentSec: currentElapsed,
@@ -227,11 +291,13 @@ export default function ExamPage() {
         error instanceof Error ? error.message : 'Failed to complete exam',
       )
     }
-  }, [sessionId, workbookId, navigate, complete, queryClient])
+  }, [sessionId, workbookId, navigate, complete, queryClient, flushPendingSave])
 
   const handleAbort = useCallback(async () => {
     if (sessionId) {
       try {
+        flushPendingSave()
+        await saveQueueRef.current
         const currentElapsed = useExamStore.getState().elapsedSec
         await api.post(`/sessions/${sessionId}/abort`, {
           timeSpentSec: currentElapsed,
@@ -245,7 +311,7 @@ export default function ExamPage() {
       { success: true, data: null },
     )
     navigate(-1)
-  }, [sessionId, workbookId, navigate, complete, reset, queryClient])
+  }, [sessionId, workbookId, navigate, complete, reset, queryClient, flushPendingSave])
 
   const elapsedSec = useElapsedSec()
 
@@ -303,67 +369,33 @@ export default function ExamPage() {
     (choiceId: string) => {
       if (!question) return
 
-      if (question.isMultiAnswer) {
-        setSelectedChoiceIds((prev) =>
-          prev.includes(choiceId)
+      setSelectedChoiceIds((prev) => {
+        const next = question.isMultiAnswer
+          ? prev.includes(choiceId)
             ? prev.filter((id) => id !== choiceId)
-            : [...prev, choiceId],
-        )
-      } else {
-        setSelectedChoiceIds([choiceId])
-      }
+            : [...prev, choiceId]
+          : [choiceId]
+        scheduleSave(currentIndex, question.questionId, next)
+        return next
+      })
     },
-    [question],
+    [question, currentIndex, scheduleSave],
   )
-
-  const handleSubmitAnswer = useCallback(async () => {
-    if (!sessionId || !question || selectedChoiceIds.length === 0) return
-
-    setIsSubmitting(true)
-    try {
-      const timeSpentSec = Math.round(
-        (Date.now() - questionStartTime.current) / 1000,
-      )
-      recordQuestionTime(currentIndex, timeSpentSec)
-      setAnswer(currentIndex, selectedChoiceIds)
-
-      await api.post<AnswerReceivedResponse>(
-        `/sessions/${sessionId}/answers`,
-        {
-          questionId: question.questionId,
-          choiceIds: selectedChoiceIds,
-          timeSpentSec,
-          sessionElapsedSec: useExamStore.getState().elapsedSec,
-        },
-      )
-    } catch (error) {
-      throw new Error(
-        error instanceof Error ? error.message : 'Failed to submit answer',
-      )
-    } finally {
-      setIsSubmitting(false)
-    }
-  }, [
-    sessionId,
-    question,
-    selectedChoiceIds,
-    currentIndex,
-    recordQuestionTime,
-    setAnswer,
-  ])
 
   const handleNavigate = useCallback(
-    async (index: number) => {
+    (index: number) => {
       if (index < 0 || index >= totalQuestions) return
-
-      if (selectedChoiceIds.length > 0 && !(currentIndex in answers)) {
-        await handleSubmitAnswer()
-      }
-
+      flushPendingSave()
       setCurrentIndex(index)
     },
-    [totalQuestions, selectedChoiceIds, answers, currentIndex, handleSubmitAnswer, setCurrentIndex],
+    [totalQuestions, flushPendingSave, setCurrentIndex],
   )
+
+  useEffect(() => {
+    return () => {
+      flushPendingSave()
+    }
+  }, [flushPendingSave])
 
   const keyHandlerRef = useRef<(e: KeyboardEvent) => void>(() => {})
   keyHandlerRef.current = (e: KeyboardEvent) => {
@@ -385,12 +417,6 @@ export default function ExamPage() {
     }
 
     switch (key) {
-      case 'enter':
-        e.preventDefault()
-        if (selectedChoiceIds.length > 0 && !(currentIndex in answers)) {
-          handleSubmitAnswer()
-        }
-        break
       case 'n':
         if (currentIndex < totalQuestions - 1) {
           handleNavigate(currentIndex + 1)
@@ -561,8 +587,6 @@ export default function ExamPage() {
     )
   }
 
-  const isCurrentAnswered = currentIndex in answers
-
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-4 pb-16 md:pb-4">
       <div className="flex items-center justify-between">
@@ -710,22 +734,6 @@ export default function ExamPage() {
               })}
             </div>
           </div>
-
-          {!isCurrentAnswered && (
-            <button
-              onClick={handleSubmitAnswer}
-              disabled={selectedChoiceIds.length === 0 || isSubmitting}
-              className="w-full rounded-lg bg-primary px-4 py-3 font-medium text-primary-foreground hover:bg-primary/90 active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSubmitting ? '保存中...' : '回答を保存'}
-            </button>
-          )}
-
-          {isCurrentAnswered && (
-            <div className="rounded-lg border border-success/30 bg-success-muted p-3 text-center text-sm text-success-foreground">
-              回答を保存しました
-            </div>
-          )}
 
           <div className="flex items-center justify-between">
             <button
